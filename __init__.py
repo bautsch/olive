@@ -394,10 +394,23 @@ class Branch():
         save_to_excel(self, file_path='archive')
         save_to_excel(self, file_path='main')
 
-    def add_properties(self, idp=None, area=None, scenario=None, project=None):
+    def add_properties(self, idp=None, pad=None, short_pad=None,
+                       area=None, scenario=None, project=None):
         if idp is not None:
             print('adding properties by id')
             properties = load_properties(self, idp=idp)
+        elif pad is not None:
+            if type(pad) == list:
+                print('adding properties by pad:\t\t' + ', '.join(p for p in pad))
+            else:
+                print('adding properties by pad:\t\t' + pad)
+            properties = load_properties(self, pad=pad)
+        elif short_pad is not None:
+            if type(short_pad) == list:
+                print('adding properties by short_pad:\t\t' + ', '.join(p for p in short_pad))
+            else:
+                print('adding properties by short_pad:\t\t' + short_pad)
+            properties = load_properties(self, short_pad=short_pad)
         elif area is not None:
             print('adding properties by area:\t\t' + ', '.join(a for a in area))
             properties = load_properties(self, area=area)
@@ -415,6 +428,7 @@ class Branch():
             project = self.scenario.project
             project_id = self.scenario.project_id
             properties = load_properties(self, project=(project, project_id))         
+        print(len(properties.propnum.unique()), 'new properties added')
 
         if self.properties is None:
             self.properties = properties
@@ -422,6 +436,7 @@ class Branch():
             self.properties = pd.concat([self.properties, properties])
         if self.framework is not None:
             self.framework.load_well_data(properties)
+
 
     def load_output(self, scenario_name=None):
         start = time.time()

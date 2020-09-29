@@ -311,7 +311,8 @@ def load_schedule_properties(schedule):
                 'and pad in (' + pad_list + ')')
     return pd.read_sql(query, conn)
 
-def load_properties(branch, idp=None, area=None, scenario=None, project=None, budget_type='base'):
+def load_properties(branch, idp=None, pad=None, short_pad=None, 
+                    area=None, scenario=None, project=None, budget_type='base'):
     conn = connect(branch.tree.connection_dict)
     if idp is not None:
         idp_list = ', '.join('\'{0}\''.format(p) for p in idp)
@@ -323,6 +324,30 @@ def load_properties(branch, idp=None, area=None, scenario=None, project=None, bu
                     'and forecasts.scenario = \'' + branch.scenario.forecast + '\' '
                     'and properties.active = 1 ' 
                     'and properties.propnum in (' + idp_list + ')')
+    if pad is not None:
+        if type(pad) == list:
+            pad_list = ', '.join('\'{0}\''.format(p) for p in pad)
+        else:
+            pad_list = '\'' + pad + '\''
+        query = str('select properties.* from properties ' +
+                    'inner join economics on properties.propnum = economics.idp '
+                    'inner join forecasts on economics.idp = forecasts.idp '
+                    'where properties.scenario = \'' + branch.scenario.properties + '\' '
+                    'and economics.scenario = \'' + branch.scenario.economics + '\' '
+                    'and forecasts.scenario = \'' + branch.scenario.forecast + '\' '
+                    'and properties.pad in (' + pad_list + ')')
+    if short_pad is not None:
+        if type(short_pad) == list:
+            short_pad_list = ', '.join('\'{0}\''.format(p) for p in short_pad)
+        else:
+            short_pad_list = '\'' + short_pad + '\''
+        query = str('select properties.* from properties ' +
+                    'inner join economics on properties.propnum = economics.idp '
+                    'inner join forecasts on economics.idp = forecasts.idp '
+                    'where properties.scenario = \'' + branch.scenario.properties + '\' '
+                    'and economics.scenario = \'' + branch.scenario.economics + '\' '
+                    'and forecasts.scenario = \'' + branch.scenario.forecast + '\' '
+                    'and properties.short_pad in (' + short_pad_list + ')')
     if area is not None:
         if type(area) == list:
             area_list = ', '.join('\'{0}\''.format(a) for a in area)
