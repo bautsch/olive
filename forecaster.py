@@ -13,9 +13,10 @@ pd.options.display.float_format = '{:,.2f}'.format
 
 
 class Forecaster():
-    def __init__(self, branch, overwrite=False):
+    def __init__(self, branch, overwrite=False, forecast_type=None):
         self.branch = branch
         self.overwrite = overwrite
+        self.forecast_type = forecast_type
         print('loading autoforecaster parameters')
         self.auto_params = load_auto_params(self)
         self.well_dict = None
@@ -88,7 +89,7 @@ class Forecaster():
                                                  'branch': self.branch,
                                                  'idp': p,
                                                  'well_name': prop_info[prop_info.propnum == p].bolo_well_name.values[0],
-                                                 'pad': prop_info[prop_info.propnum == p].pad.values[0],
+                                                 'pad': prop_info[prop_info.propnum == p]['pad'].values[0],
                                                  'short_pad': prop_info[prop_info.propnum == p].short_pad.values[0],
                                                  'area': prop_info[prop_info.propnum == p].prospect.values[0],
                                                  'project': None,
@@ -115,6 +116,20 @@ class Forecaster():
             sys.stdout.flush()
             sql_props = properties_with_forecasts(self)
             property_list = [p for p in property_list if p not in sql_props]
+        if self.forecast_type:
+            print('only autofitting wells with forecast type:', self.forecast_type)
+            filtered_props = []
+            for p in property_list:
+                if 'autotype' in self.branch.model[p].forecasts.forecast_type:
+                    p_type = 'autotype'
+                else:
+                    p_type = self.branch.model[p].forecasts.forecast_type
+                if isinstance(self.forecast_type, list):
+                    if p_type in self.forecast_type:
+                       filtered_props.append(p)
+                elif p_type == self.forecast_type:
+                    filtered_props.append(p)
+            property_list = filtered_props
         if len(property_list) > 0:
             num_properties = len(property_list)
             num_processes = int(num_properties / 50)

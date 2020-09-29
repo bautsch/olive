@@ -366,15 +366,17 @@ class Branch():
         time.sleep(3)
         self.tree.monte_carlo(self.name)
 
-    def autofit(self, overwrite=False):
+    def autofit(self, overwrite=False, forecast_type=None):
         if self.forecaster is None:
-            self.forecaster = Forecaster(self, overwrite)
+            self.forecaster = Forecaster(self, overwrite, forecast_type)
         print('starting autoforecaster')
         print('overwrite:\t\t\t\t' + str(overwrite))
+        if forecast_type:
+            print('forecast type:\t\t\t\t' + str(forecast_type))
         print('deleting old production forecast info')
-        delete_prod_info(self.forecaster, overwrite)
+        delete_prod_info(self.forecaster, overwrite, forecast_type)
         print('deleting old production forecasts')
-        delete_prod_forecasts(self.forecaster, overwrite)
+        delete_prod_forecasts(self.forecaster, overwrite, forecast_type)
         print('saving temp load file')
         save_object(self, 'temp\\load')
         time.sleep(3)
