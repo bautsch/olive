@@ -17,7 +17,7 @@ class Forecaster():
         self.branch = branch
         self.overwrite = overwrite
         self.forecast_type = forecast_type
-        print('loading autoforecaster parameters')
+        print('\nloading autoforecaster parameters')
         self.auto_params = load_auto_params(self)
         self.well_dict = None
         print('loading production forecast info')
@@ -103,12 +103,12 @@ class Forecaster():
                                                  'price_deck': None,
                                                  'autoforecaster': self
                                                 })      
-
+        print(len(self.branch.properties.propnum.unique()), 'properties loaded')
         stop = time.time()
         timer(start, stop)
 
     def autofit(self):
-        print('autofitting forecasts')
+        print('\nautofitting forecasts')
         sys.stdout.flush()
         start = time.time()
         property_list = self.branch.properties.propnum.values

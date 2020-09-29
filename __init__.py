@@ -124,7 +124,7 @@ class Tree():
         while not os.path.exists('temp\\reload.pkl'):
             time.sleep(5)
         if os.path.isfile('temp\\reload.pkl'):
-            print('loading temp reload file')
+            print('\nloading temp reload file')
             self.branches['temp'] = load_object('temp\\reload')
             o = self.branches['temp'].framework.output
             del self.branches['temp']
@@ -168,7 +168,7 @@ class Tree():
         while not os.path.exists('temp\\reload.pkl'):
             time.sleep(5)
         if os.path.isfile('temp\\reload.pkl'):
-            print('loading temp reload file')
+            print('\nloading temp reload file')
             self.branches['temp'] = load_object('temp\\reload')
             e = self.branches['temp'].framework.econ_dists
             del self.branches['temp']
@@ -208,7 +208,7 @@ class Tree():
         while not os.path.exists('temp\\reload.pkl'):
             time.sleep(5)
         if os.path.isfile('temp\\reload.pkl'):
-            print('loading temp reload file')
+            print('\nloading temp reload file')
             self.branches['temp'] = load_object('temp\\reload')
             w = self.branches['temp'].forecaster.well_dict
             l = self.branches['temp'].forecaster.log
@@ -309,7 +309,7 @@ class Branch():
 
     def build_schedule(self, schedule_file_path, gantt_start_date=date(2019, 1, 1),
                        gantt_years=3, show_gantt=True, verbose=False):
-        print('building schedule')
+        print('\nbuilding schedule')
         self.schedule = Schedule(self,
                                  schedule_file_path,
                                  gantt_start_date,
@@ -317,7 +317,7 @@ class Branch():
                                  show_gantt)
 
     def load_schedule(self):
-        print('loading schedule')
+        print('\nloading schedule')
         self.schedule = load_object(self.tree.name + '\\' + self.scenario.schedule)
         if self.properties is None:
             self.properties = self.schedule.properties
@@ -369,7 +369,7 @@ class Branch():
     def autofit(self, overwrite=False, forecast_type=None):
         if self.forecaster is None:
             self.forecaster = Forecaster(self, overwrite, forecast_type)
-        print('starting autoforecaster')
+        print('\nstarting autoforecaster')
         print('overwrite:\t\t\t\t' + str(overwrite))
         if forecast_type:
             print('forecast type:\t\t\t\t' + str(forecast_type))
@@ -377,11 +377,11 @@ class Branch():
         delete_prod_info(self.forecaster, overwrite, forecast_type)
         print('deleting old production forecasts')
         delete_prod_forecasts(self.forecaster, overwrite, forecast_type)
-        print('saving temp load file')
+        print('\nsaving temp load file')
         save_object(self, 'temp\\load')
         time.sleep(3)
         self.tree.autofit(self.name)
-        print('saving new production forecast info')
+        print('\nsaving new production forecast info')
         save_prod_info(self.forecaster, overwrite)
         print('saving log')
         save_log(self.forecaster)

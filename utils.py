@@ -1456,7 +1456,7 @@ def residuals(params, y, dmin, min_rate, method='beta'):
 
 def delete_prod_info(forecaster, overwrite, forecast_type):
     start = time.time()
-    prop_list = forecaster.branch.properties.propnum.unique()
+    prop_list = list(forecaster.branch.properties.propnum.unique())
     if forecast_type:
         filtered_props = []
         for p in prop_list:
@@ -1587,7 +1587,7 @@ def properties_with_forecasts(forecaster):
 
 def delete_prod_forecasts(forecaster, overwrite, forecast_type):
     start = time.time()
-    prop_list = forecaster.branch.properties.propnum.unique()
+    prop_list = list(forecaster.branch.properties.propnum.unique())
     if forecast_type:
         filtered_props = []
         for p in prop_list:
