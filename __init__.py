@@ -361,7 +361,7 @@ class Branch():
         self.framework.uncertainty = uncertainty
         self.framework.risk = risk
         self.framework.num_simulations = num_simulations
-        print('saving temp load file')
+        print('\nsaving temp load file')
         save_object(self, 'temp\\load')
         time.sleep(3)
         self.tree.monte_carlo(self.name)
@@ -397,34 +397,34 @@ class Branch():
     def add_properties(self, idp=None, pad=None, short_pad=None,
                        area=None, scenario=None, project=None):
         if idp is not None:
-            print('adding properties by id')
+            print('\nadding properties by id')
             properties = load_properties(self, idp=idp)
         elif pad is not None:
             if type(pad) == list:
-                print('adding properties by pad:\t\t' + ', '.join(p for p in pad))
+                print('\nadding properties by pad:\t\t' + ', '.join(p for p in pad))
             else:
-                print('adding properties by pad:\t\t' + pad)
+                print('\nadding properties by pad:\t\t' + pad)
             properties = load_properties(self, pad=pad)
         elif short_pad is not None:
             if type(short_pad) == list:
-                print('adding properties by short_pad:\t\t' + ', '.join(p for p in short_pad))
+                print('\nadding properties by short_pad:\t\t' + ', '.join(p for p in short_pad))
             else:
-                print('adding properties by short_pad:\t\t' + short_pad)
+                print('\nadding properties by short_pad:\t\t' + short_pad)
             properties = load_properties(self, short_pad=short_pad)
         elif area is not None:
-            print('adding properties by area:\t\t' + ', '.join(a for a in area))
+            print('\nadding properties by area:\t\t' + ', '.join(a for a in area))
             properties = load_properties(self, area=area)
         elif self.scenario.area is not None:
-            print('adding properties by area:\t\t' + ', '.join(a for a in area))
+            print('\nadding properties by area:\t\t' + ', '.join(a for a in area))
             properties = load_properties(self, area=area)            
         elif scenario is not None:
-            print('adding properties by scenario')
+            print('\nadding properties by scenario')
             properties = load_properties(self, scenario=scenario)
         elif project is not None:
-            print('adding properties by project')
+            print('\nadding properties by project')
             properties = load_properties(self, project=(project['name'], project['id']))
         elif self.scenario.project is not None:
-            print('adding properties by project')
+            print('\nadding properties by project')
             project = self.scenario.project
             project_id = self.scenario.project_id
             properties = load_properties(self, project=(project, project_id))         
@@ -450,7 +450,7 @@ class Branch():
     def build_output(self, uncertainty=None, risk=None):
         self.framework.uncertainty = uncertainty
         self.framework.risk = risk
-        print('saving temp load file')
+        print('\nsaving temp load file')
         save_object(self, 'temp\\load')
         time.sleep(3)
         self.tree.build_output(self.name)

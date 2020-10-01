@@ -561,15 +561,18 @@ class Forecaster():
         for t, y in well.yields_dict.items():
             if y is not None:
                 if t == 'gas':
-                    fcst_dict['gas'] = fcst_dict['oil'] * y
+                    fcst_dict['gas'] = np.concat([fcst_dict['gas'][:start_idx],
+                                                  fcst_dict['oil'][start_idx:] * y])
                     fcst_dict[t] = np.nan_to_num(fcst_dict[t], copy=True, nan=0.0, neginf=0.0, posinf=0.0)
                     fcst_dict['cum_gas'] = fcst_dict['gas'].cumsum()
                 if t == 'oil':
-                    fcst_dict['oil'] = fcst_dict['gas'] * y / 1000
+                    fcst_dict['oil'] = np.concat([fcst_dict['oil'][:start_idx],
+                                                  fcst_dict['gas'][start_idx:] * y / 1000])
                     fcst_dict[t] = np.nan_to_num(fcst_dict[t], copy=True, nan=0.0, neginf=0.0, posinf=0.0)
                     fcst_dict['cum_oil'] = fcst_dict['oil'].cumsum()
                 if t == 'water':
-                    fcst_dict['water'] = fcst_dict['gas'] * y / 1000
+                    fcst_dict['water'] = np.concat([fcst_dict['water'][:start_idx],
+                                                  fcst_dict['gas'][start_idx:] * y / 1000])
                     fcst_dict[t] = np.nan_to_num(fcst_dict[t], copy=True, nan=0.0, neginf=0.0, posinf=0.0)
                     fcst_dict['cum_water'] = fcst_dict['water'].cumsum()
 

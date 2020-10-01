@@ -41,7 +41,7 @@ class Framework():
         return pretty_print(print_df)
 
     def load_framework(self):
-        print('initializing framework')
+        print('\ninitializing framework')
         sql_load = load_framework_scenario(self)
 
         self.effective_date = pd.Timestamp(sql_load['effective_date'])
@@ -278,10 +278,10 @@ class Framework():
 
     def run_populate(self):
         if not self.mc_pop:
-            print('deleting scenario from output table')
+            print('\ndeleting scenario from output table')
             sys.stdout.flush()
             delete_output(self)
-        print('populating')
+        print('\npopulating')
         sys.stdout.flush()
         start = time.time()
         property_list = self.branch.properties.propnum.values
@@ -298,6 +298,7 @@ class Framework():
             print(i+1, len(chunk))
             sys.stdout.flush()
         print(n, 'total properties in chunks', len(property_list), 'total properties in model')
+        print('\n')
         sys.stdout.flush()
         pool = mp.Pool(processes=len(chunks))
         results = pool.map(self.prepopulate, chunks)
