@@ -5,6 +5,8 @@ import numpy as np
 from pandas.tseries.offsets import MonthEnd
 import matplotlib.pyplot as plt
 from datetime import date
+from datetime import datetime
+from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 from pylatex import Document, Section,Center, Subsection,Tabu, LongTabu, Tabular, MiniPage, LineBreak, VerticalSpace, Math,NewLine, TikZ, Axis,Plot, Figure, Matrix, Alignat,\
      MultiColumn,MultiRow,PageStyle, Head, Foot,StandAloneGraphic,LargeText, MediumText,LineBreak, NewPage, Tabularx, TextColor,Command,basic,HugeText,\
@@ -55,7 +57,7 @@ class Capacity():
                                     'system': list(systems) * len(prepend_dates),
                                     'max_volume': np.zeros(len(systems) * len(prepend_dates))})
             for sys in systems:
-                prepend.loc[prepend.system == sys, 'max_volume'] = min_volumes.loc[min_volumes.system == sys, 'max_volume'].values
+                prepend.loc[prepend.system == sys, 'max_volume'] = min_volumes.loc[min_volumes.system == sys, 'max_volume'].values[0]
             self.max_volumes = pd.concat([prepend, self.max_volumes])
 
         if max_date < self.date_range.max():
@@ -65,7 +67,7 @@ class Capacity():
                                    'system': list(systems) * len(append_dates),
                                    'max_volume': np.zeros(len(systems) * len(append_dates))})
             for sys in systems:
-               append.loc[append.system == sys, 'max_volume'] = max_volumes.loc[max_volumes.system == sys, 'max_volume'].values
+                append.loc[append.system == sys, 'max_volume'] = max_volumes.loc[max_volumes.system == sys, 'max_volume'].values[0]
             self.max_volumes = pd.concat([self.max_volumes, append])
 
         for system in self.system_list:
@@ -85,12 +87,12 @@ class Capacity():
             else:
                 tmp['wedge_volume'] = bud[bud.budget_type == 'wedge'].gross_gas.values
             pad_volumes = sys.groupby(by=['prod_date', 'pad'], as_index=False).gross_gas.sum()
-            wedge_pads = sys[sys.budget_type == 'wedge'].pad.unique()
+            wedge_pads = sys[sys.budget_type == 'wedge']['pad'].unique()
             for p in wedge_pads:
-                if pad_volumes[pad_volumes.pad == p].empty:
+                if pad_volumes[pad_volumes['pad'] == p].empty:
                     continue
                 elif system not in ('LOW_PRESSURE', 'MEDIUM_PRESSURE'):
-                    tmp.loc[:, p] = pad_volumes.loc[pad_volumes.pad == p, 'gross_gas'].values
+                    tmp.loc[:, p] = pad_volumes.loc[pad_volumes['pad'] == p, 'gross_gas'].values
             tmp = pd.merge(left=tmp, right=self.max_volumes.drop(columns=['scenario']),
                            how='left', on=['system', 'prod_date'])
             tmp = pd.merge(left=tmp, right=self.input_volumes.drop(columns=['scenario']),
@@ -101,12 +103,12 @@ class Capacity():
                 continue
             sys = df.loc[df.system == system, :].copy()  
             pad_volumes = sys.groupby(by=['prod_date', 'pad'], as_index=False).gross_gas.sum()
-            wedge_pads = sys[sys.budget_type == 'wedge'].pad.unique()
+            wedge_pads = sys[sys.budget_type == 'wedge']['pad'].unique()
             for p in wedge_pads:
-                if pad_volumes[pad_volumes.pad == p].empty:
+                if pad_volumes[pad_volumes['pad'] == p].empty:
                     continue
                 else:
-                    self.system_dict['STORY_GULCH'].loc[:, p] = pad_volumes.loc[pad_volumes.pad == p, 'gross_gas'].values
+                    self.system_dict['STORY_GULCH'].loc[:, p] = pad_volumes.loc[pad_volumes['pad'] == p, 'gross_gas'].values
 
     def story_gulch(self):
         print('building story gulch model')
@@ -183,12 +185,14 @@ class Report(Document):
                             'includeheadfoot': False}
         super().__init__(geometry_options = geometry_options)
         self.capacity = capacity
-        self.month1 = 4
-        self.month2 = 5
-        self.month3 = 6
-        self.value1 = 3
-        self.value2 = 4
-        self.value3 = 5
+        self.month1 = datetime.now().month
+        self.month2 = datetime.now().month + 1
+        self.month3 = datetime.now().month + 2
+        self.year =  datetime.now().year
+        self.dt_start = datetime(year=self.year, month=self.month1, day=1)
+        self.dt_end = self.dt_start + timedelta(days=365)
+
+
         self.x = self.capacity.branch.framework.date_range
 
     def header(self):
@@ -209,8 +213,10 @@ class Report(Document):
     def story_gulch(self):
         with self.create(Section('Story Gulch'))as section_sg:
             df = self.capacity.models['story_gulch']
+            mask = (df['prod_date'] >= self.dt_start) & (df['prod_date'] < self.dt_end)
+            table_df = df.loc[mask]
             summary_table_sg = Tabular('ccc|ccc|ccc', row_height=.40, width=9, booktabs=True)
-            avg_tablemaker(summary_table_sg, df, self.month1, self.month2, self.month3)
+            avg_tablemaker(summary_table_sg, table_df, self.month1, self.month2, self.month3)
             self.append(summary_table_sg)            
             with self.create(Figure(position='h!')) as sg_plot:
                 sg_fig,(ax1) = plt.subplots(nrows=1, ncols=1, sharex=True,
@@ -230,17 +236,20 @@ class Report(Document):
                                  'Date', 'Gas, MCF', 'Delta')
                 table_sg.add_hline()
                 tablemaker(table_sg,
-                                 df.prod_date.astype(str).tolist(),
-                                 df.forecast.values.tolist(),
-                                 df.report_overflow.values.tolist())
+                                 table_df.prod_date.astype(str).tolist(),
+                                 table_df.forecast.values.tolist(),
+                                 table_df.report_overflow.values.tolist(),
+                                self.month1, self.month2, self.month3)
             section_sg.append(table_sg)
         self.append(NewPage())
 
     def offload(self):
         with self.create(Section('Offload'))as section_off:
             df = self.capacity.models['offload']
+            mask = (df['prod_date'] >= self.dt_start) & (df['prod_date'] < self.dt_end)
+            table_df = df.loc[mask]
             summary_table_off = Tabular('ccc|ccc|ccc', row_height=.40, width=9, booktabs=True)
-            avg_tablemaker(summary_table_off, df, self.month1, self.month2, self.month3)
+            avg_tablemaker(summary_table_off, table_df, self.month1, self.month2, self.month3)
             self.append(summary_table_off)            
             with self.create(Figure(position='h!')) as off_plot:
                 off_fig,(ax1) = plt.subplots(nrows=1, ncols=1, sharex=True,
@@ -259,17 +268,20 @@ class Report(Document):
                                  'Date', 'Gas, MCF', 'Delta')
                 table_off.add_hline()
                 tablemaker(table_off,
-                                 df.prod_date.astype(str).tolist(),
-                                 df.forecast.values.tolist(),
-                                 df.report_overflow.values.tolist())
+                                 table_df.prod_date.astype(str).tolist(),
+                                 table_df.forecast.values.tolist(),
+                                 table_df.report_overflow.values.tolist(),
+                            self.month1, self.month2, self.month3)
             section_off.append(table_off)
         self.append(NewPage())                              
 
     def middle_fork(self):
         with self.create(Section('Middle Fork'))as section_mf:
             df = self.capacity.models['middle_fork']
+            mask = (df['prod_date'] >= self.dt_start) & (df['prod_date'] < self.dt_end)
+            table_df = df.loc[mask]
             summary_table_mf = Tabular('ccc|ccc|ccc', row_height=.40, width=9, booktabs=True)
-            avg_tablemaker(summary_table_mf, df, self.month1, self.month2, self.month3)
+            avg_tablemaker(summary_table_mf, table_df, self.month1, self.month2, self.month3)
             self.append(summary_table_mf)            
             with self.create(Figure(position='h!')) as mf_plot:
                 mf_fig,(ax1) = plt.subplots(nrows=1, ncols=1, sharex=True,
@@ -289,9 +301,10 @@ class Report(Document):
                                  'Date', 'Gas, MCF', 'Delta')
                 table_mf.add_hline()
                 tablemaker(table_mf,
-                                 df.prod_date.astype(str).tolist(),
-                                 df.forecast.values.tolist(),
-                                 df.report_overflow.values.tolist())
+                                 table_df.prod_date.astype(str).tolist(),
+                                 table_df.forecast.values.tolist(),
+                                 table_df.report_overflow.values.tolist(),
+                            self.month1, self.month2, self.month3)
             section_mf.append(table_mf)
         self.append(NewPage())
     

@@ -18,6 +18,7 @@ from pandas.tseries.offsets import MonthEnd
 from turbodbc import connect as con
 from turbodbc import make_options
 from datetime import date
+import datetime
 from datetime import timedelta
 import multiprocessing as mp
 from bokeh.io import show
@@ -43,6 +44,7 @@ sns.set_style('whitegrid')
 sns.set_palette('husl')
 import matplotlib as mpl
 mpl.rcParams['figure.dpi'] = 100
+
 
 
 class _dotdict(dict):
@@ -1202,11 +1204,27 @@ def save_aggregation_to_excel(branch, file_path, subset):
             branch.framework.aggregations['All'].to_excel(writer, sheet_name=name, index=False)
         writer.save()   
 
-def tablemaker(table, prod_date, forecast, overflow):
-    for i,j,k in zip(range(91,122), range(121,152), range(152,183)):
-        table.add_row(prod_date[i], '{:,.0f}'.format(forecast[i]), '{:,.0f}'.format(overflow[i]),
-                      prod_date[j], '{:,.0f}'.format(forecast[j]), '{:,.0f}'.format(overflow[j]),
-                      prod_date[k], '{:,.0f}'.format(forecast[k]), '{:,.0f}'.format(overflow[k]))
+def tablemaker(table, prod_date, forecast, overflow, month1,month2,month3):
+    month1_index = []
+    month2_index = []
+    month3_index = []
+    for value in prod_date:
+        if value[5:7] == str(month1):
+            month1_index.append(prod_date.index(value))
+        elif value[5:7] == str(month2):
+            month2_index.append(prod_date.index(value))
+        elif value[5:7] == str(month3):
+            month3_index.append(prod_date.index(value))
+    for i,j,k in zip(range(min(month1_index),max(month1_index)), range(min(month2_index),max(month2_index)), range(min(month3_index),max(month3_index))):
+        try:
+            table.add_row(prod_date[i], '{:,.0f}'.format(forecast[i]), '{:,.0f}'.format(overflow[i]),
+                          prod_date[j], '{:,.0f}'.format(forecast[j]), '{:,.0f}'.format(overflow[j]),
+                          prod_date[k], '{:,.0f}'.format(forecast[k]), '{:,.0f}'.format(overflow[k]))
+        except:
+            table.add_row(' ', ' ', ' ',
+                          ' ', ' ',' ',
+                          ' ', ' ', ' ')
+
         table.add_hline(cmidruleoption = '[3pt]')
 
 def monthly_avg(df, month1, month2, month3):
@@ -1216,15 +1234,15 @@ def monthly_avg(df, month1, month2, month3):
 	d_avg = {month1: [], month2:  [],month3:  []}
 
 	for index,row in df.iterrows():
-            if row['prod_date'].month == month1 and row['prod_date'].year == 2020:
+            if row['prod_date'].month == month1:
                 d[month1][0].append(row['forecast'])
                 d[month1][1].append(row['max_volume'])
                 d[month1][2].append(row['report_overflow'])
-            if row['prod_date'].month == month2 and row['prod_date'].year == 2020:
+            if row['prod_date'].month == month2:
                 d[month2][0].append(row['forecast'])
                 d[month2][1].append(row['max_volume'])
                 d[month2][2].append(row['report_overflow'])
-            if row['prod_date'].month == month3 and row['prod_date'].year == 2020:
+            if row['prod_date'].month == month3:
                 d[month3][0].append(row['forecast'])
                 d[month3][1].append(row['max_volume'])
                 d[month3][2].append(row['report_overflow'])
@@ -1246,9 +1264,9 @@ def monthly_avg(df, month1, month2, month3):
 
 def avg_tablemaker(table, df, month1, month2, month3):
     d_avg = monthly_avg(df, month1, month2, month3)
-    row_cells = (MultiColumn(3, align='c|', data='April'),
-                 MultiColumn(3, align='c|', data='May'),
-                 MultiColumn(3, align='c', data='June'))
+    row_cells = (MultiColumn(3, align='c|', data=datetime.date(1900, month1, 1).strftime('%B')),
+                 MultiColumn(3, align='c|', data=datetime.date(1900, month2, 1).strftime('%B')),
+                 MultiColumn(3, align='c', data=datetime.date(1900, month3, 1).strftime('%B')))
     table.add_row(row_cells)
     table.add_hline()
     table.add_row('Gas', 'Capacity', 'Delta',
