@@ -1,6 +1,6 @@
 from .utils import *
 from .utils import _dotdict
-from .schedule import Schedule
+from .schedule import Schedule, Well_Sched
 from .framework import Framework
 from .capacity import Capacity
 from .forecaster import Forecaster
@@ -331,6 +331,7 @@ class Branch():
                                                        'tree': self.tree,
                                                        'branch': self,
                                                        'idp': row['propnum'],
+                                                       'budget_type': row['budget_type'],
                                                        'well_name': row['bolo_well_name'],
                                                        'pad': row['pad'],
                                                        'short_pad': row['short_pad'],
@@ -427,13 +428,49 @@ class Branch():
             print('\nadding properties by project')
             project = self.scenario.project
             project_id = self.scenario.project_id
-            properties = load_properties(self, project=(project, project_id))         
-        print(len(properties.propnum.unique()), 'new properties added')
+            properties = load_properties(self, project=(project, project_id))       
 
         if self.properties is None:
             self.properties = properties
         else:
+            for p in self.properties.propnum:
+                if p in properties.propnum.values:
+                    tmp = properties[properties.propnum == p]
+                    properties = properties[properties.propnum != p]
+                    print(p, tmp.bolo_well_name.values[0],
+                          tmp.short_pad.values[0], tmp.pad.values[0],
+                          'already exists, skipping')
             self.properties = pd.concat([self.properties, properties])
+
+        for p in self.properties.propnum.values:
+            if p not in self.model.keys():
+                tmp = properties[properties.propnum == p]
+                tmp_sched = Well_Sched('base', p, tmp.bolo_well_name.values[0],
+                                       tmp.short_pad.values[0], tmp['pad'].values[0],
+                                       tmp.prospect, tmp.depth.values[0])
+                tmp_sched.drill_start_date = tmp.drill_start_date
+                tmp_sched.drill_end_date = tmp.drill_end_date
+                tmp_sched.compl_start_date = tmp.compl_start_date
+                tmp_sched.compl_end_date = tmp.compl_end_date
+                tmp_sched.prod_start_date = tmp.first_prod_date
+                self.model[p] = _dotdict({
+                                         'tree': self.tree,
+                                         'branch': self,
+                                         'idp': p,
+                                         'budget_type': tmp.budget_type.values[0],
+                                         'well_name': tmp.bolo_well_name.values[0],
+                                         'pad': tmp['pad'].values[0],
+                                         'short_pad': tmp['short_pad'].values[0],
+                                         'area': tmp['prospect'].values[0],
+                                         'project': None,
+                                         'project_id': None,
+                                         'properties': self.scenario.properties,
+                                         'schedule': tmp_sched,
+                                         'schedule_inputs': None
+                                          })
+
+        print(len(properties.propnum.unique()), 'new properties added')
+
         if self.framework is not None:
             self.framework.load_well_data(properties)
 

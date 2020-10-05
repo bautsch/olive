@@ -124,6 +124,7 @@ class Schedule():
                                                              'tree': self.branch.tree,
                                                              'branch': self.branch,
                                                              'idp': row['propnum'],
+                                                             'budget_type': row['budget_type'],
                                                              'well_name': row['bolo_well_name'],
                                                              'pad': row['pad'],
                                                              'short_pad': row['short_pad'],

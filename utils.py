@@ -971,6 +971,43 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
     tmp_econ_df.loc[tmp_econ_df.prod_date < prod_start_date, param_name] = 0.0
     return tmp_econ_df
 
+def capex_parser(param, effective_date, end_date):
+    tmp_df = pd.DataFrame(columns=['prod_date', 'eomonth', 'inv_g_misc'])
+    date_range = pd.date_range(effective_date, end_date, freq='D')
+    tmp_df.prod_date = date_range
+    tmp_df.eomonth = tmp_df.prod_date + MonthEnd(1)
+    tmp_df.inv_g_misc = 0.0
+    params = param.split(',')
+    for p in params:
+        p_split = p.split(' ')
+        if len(p_split) == 1:
+            try:
+                p_split = float(p_split[0])
+                if p_split > 0.001:
+                    print('misc capex with no date provided')
+                    return tmp_df
+                else:
+                    return tmp_df
+            except:
+                print('bad misc capex')
+                return tmp_df
+        if len(p_split) > 1:
+            try:
+                p_cap = float(p_split[0])
+            except:
+                print('capex not float')
+                return tmp_df
+            if p_split[1] != 'on':
+                print('invalid syntax, missing \'on\'')
+                return tmp_df
+            try:
+                p_date = pd.Timestamp(p_split[2])
+            except:
+                print('invalid date')
+                return tmp_df
+            tmp_df.loc[tmp_df.prod_date == p_date, 'inv_g_misc'] = p_cap
+    return tmp_df
+
 def load_output_from_sql(branch, scenario_name):
     conn = connect(branch.tree.connection_dict)
     start_date = branch.framework.effective_date

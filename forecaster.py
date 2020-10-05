@@ -48,7 +48,6 @@ class Forecaster():
             pad = prop_info['pad'].values[0]
             short_pad = prop_info.short_pad.values[0]
             area = prop_info.prospect.values[0]
-            budget_type = fcst_info.budget_type.values[0]
             prod_forecast_scenario = fcst_info.prod_forecast_scenario.values[0]
             forecast = fcst_info.forecast.values[0]
             forecast_type = fcst_info.forecast_type.values[0]
@@ -74,7 +73,7 @@ class Forecaster():
                         prod_info[t][c] = pf.loc[pf.prod_type == t, c].values
             
 
-            self.well_dict[p] = Well_Forecast(p, prod_forecast_scenario, forecast, forecast_type, budget_type, yields_dict,
+            self.well_dict[p] = Well_Forecast(p, prod_forecast_scenario, forecast, forecast_type, yields_dict,
                                               None, prod_info, Well_Prod_Info(prod_info['gas']),
                                               Well_Prod_Info(prod_info['oil']), Well_Prod_Info(prod_info['water']))
 
@@ -287,6 +286,7 @@ class Forecaster():
                 cols = ['prod_date']
                 cols.extend(w.prod_types)
                 production = load_production(self.branch, [p])
+                w.production = production
 
                 if production.empty:
                     print(p, 'has no production')
@@ -561,20 +561,31 @@ class Forecaster():
         for t, y in well.yields_dict.items():
             if y is not None:
                 if t == 'gas':
-                    fcst_dict['gas'] = np.concat([fcst_dict['gas'][:start_idx],
-                                                  fcst_dict['oil'][start_idx:] * y])
+                    if well.production['gas'].sum() > 0.0:
+                        fcst_dict['gas'] = np.concatenate([well.production['gas'][:start_idx],
+                                                    fcst_dict['oil'][start_idx:] * y])
+                    else:
+                        fcst_dict['gas'] = fcst_dict['oil'] * y
                     fcst_dict[t] = np.nan_to_num(fcst_dict[t], copy=True, nan=0.0, neginf=0.0, posinf=0.0)
                     fcst_dict['cum_gas'] = fcst_dict['gas'].cumsum()
                 if t == 'oil':
-                    fcst_dict['oil'] = np.concat([fcst_dict['oil'][:start_idx],
-                                                  fcst_dict['gas'][start_idx:] * y / 1000])
+                    if well.production['oil'].sum() > 0.0:
+                        fcst_dict['oil'] = np.concatenate([well.production['oil'][:start_idx],
+                                                           fcst_dict['gas'][start_idx:] * y / 1000])
+                    else:
+                        fcst_dict['oil'] = fcst_dict['gas'] * y / 1000
                     fcst_dict[t] = np.nan_to_num(fcst_dict[t], copy=True, nan=0.0, neginf=0.0, posinf=0.0)
                     fcst_dict['cum_oil'] = fcst_dict['oil'].cumsum()
                 if t == 'water':
-                    fcst_dict['water'] = np.concat([fcst_dict['water'][:start_idx],
-                                                  fcst_dict['gas'][start_idx:] * y / 1000])
+                    if well.production['water'].sum() > 0.0:
+                        fcst_dict['water'] = np.concatenate([well.production['water'][:start_idx],
+                                                    fcst_dict['gas'][start_idx:] * y / 1000])
+                    else:
+                        fcst_dict['water'] = fcst_dict['gas'] * y / 1000
                     fcst_dict[t] = np.nan_to_num(fcst_dict[t], copy=True, nan=0.0, neginf=0.0, posinf=0.0)
                     fcst_dict['cum_water'] = fcst_dict['water'].cumsum()
+
+        well.production = None
 
         if log['idp'] is None:
             log = None
@@ -752,14 +763,13 @@ class Forecaster():
 
 
 class Well_Forecast():
-    def __init__(self, idp, prod_forecast_scenario, forecast, forecast_type, budget_type,
+    def __init__(self, idp, prod_forecast_scenario, forecast, forecast_type,
                  yields_dict=None, yields=None, prod_info=None,
                  gas_prod_info=None, oil_prod_info=None, water_prod_info=None):
         self.idp = idp
         self.prod_forecast_scenario = prod_forecast_scenario
         self.forecast = forecast
         self.forecast_type = forecast_type
-        self.budget_type = budget_type
         self.yields_dict = yields_dict
         self.yields = yields
         self.prod_info = prod_info

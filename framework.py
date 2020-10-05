@@ -77,10 +77,9 @@ class Framework():
 
         for _, row in self.forecast_load.iterrows():
             if row['idp'] in self.forecasts.keys():
-                self.forecasts[row['idp']] = self.branch.model[row['idp']].forecast
+                self.forecasts[row['idp']] = self.branch.model[row['idp']].forecasts
                 # self.forecasts[row['idp']].forecast = row['forecast']
                 # self.forecasts[row['idp']].forecast_type = row['forecast_type']
-                # self.forecasts[row['idp']].budget_type = row['budget_type']
                 # self.forecasts[row['idp']].yields_dict = {'gas': row['gas_g_mpb'],
                 #                                           'oil': row['oil_g_bpmm'],
                 #                                           'water': row['water_g_bpmm']},
@@ -93,7 +92,6 @@ class Framework():
                                                            prod_forecast_scenario=row['prod_forecast_scenario'],
                                                            forecast=row['forecast'],
                                                            forecast_type=row['forecast_type'],
-                                                           budget_type=row['budget_type'],
                                                            yields_dict=yields)
 
                 self.forecasts[row['idp']].yields = Well_Yields(self.forecasts[row['idp']], yields)            
@@ -123,14 +121,15 @@ class Framework():
         for idp in self.forecasts.keys():
             if idp in self.branch.model.keys():
                 self.branch.model[idp].framework = self
-                if not self.branch.model[idp].forecast:
-                    self.branch.model[idp].forecast =  self.forecasts[idp]
+                if not self.branch.model[idp].forecasts:
+                    self.branch.model[idp].forecasts = self.forecasts[idp]
             else:
                 self.branch.model[idp] = _dotdict({
                                                    'tree': self.branch.tree,
                                                    'branch': self.branch,
                                                    'idp': idp,
                                                    'well_name': prop[prop.propnum == idp].bolo_well_name.values[0],
+                                                   'budget_type': prop[prop.propnum == idp].budget_type.values[0],
                                                    'pad': prop[prop.propnum == idp]['pad'].values[0],
                                                    'short_pad': prop[prop.propnum == idp].short_pad.values[0],
                                                    'area': prop[prop.propnum == idp].prospect.values[0],
@@ -154,6 +153,7 @@ class Framework():
                                                     'branch': self.branch,
                                                     'idp': idp,
                                                     'well_name': prop[prop.propnum == idp].bolo_well_name.values[0],
+                                                    'budget_type': prop[prop.propnum == idp].budget_type.values[0],
                                                     'pad': prop[prop.propnum == idp]['pad'].values[0],
                                                     'short_pad': prop[prop.propnum == idp].short_pad.values[0],
                                                     'area': prop[prop.propnum == idp].prospect.values[0],
@@ -389,6 +389,12 @@ class Framework():
             # print('production', p, n+1, 'of', num_properties)
             sys.stdout.flush()
             f = self.forecasts[p]
+            budget_flag = self.branch.model[p].budget_type
+            
+            if self.branch.model[p].schedule.schedule == 'base':
+                budget_type = 'base'
+            else:
+                budget_type = 'wedge'
 
             risk_uncertainty[p] = {}   
 
@@ -424,7 +430,7 @@ class Framework():
                 if 'ngl_price' in u.keys():
                     ngl_price_mult = apply_uncertainty(u['gas_price'])
 
-                if f.budget_type == 'wedge':
+                if budget_type == 'wedge':
                         if 'drill_cost' in u.keys():
                             drill_mult = apply_uncertainty(u['drill_cost'])
                         if 'complete_cost' in u.keys():
@@ -434,7 +440,7 @@ class Framework():
 
             if self.risk is not None:
                 r = self.risk
-                if f.budget_type == 'wedge':
+                if budget_type == 'wedge':
                     if 'drill_cost' in r.keys():
                         drill_risk = apply_risk(r['drill_cost'])
                         if drill_risk:
@@ -464,7 +470,7 @@ class Framework():
                         duration = r['downtime']['duration']
                         downtime_mult = r['downtime']['mult']
 
-            if f.budget_type == 'wedge':
+            if budget_type == 'wedge':
                 d = self.branch.schedule.schedule_dates
                 prod_start_date = pd.Timestamp(d[d.idp == p].prod_start_date.values[0])
 
@@ -481,18 +487,18 @@ class Framework():
                 t_end = (self.end_date - prod_start_date).days + 5
                 rig = [self.branch.model[p].schedule.pad.rig.rig_name]*num_days
 
-            if f.budget_type == 'base':
+            if budget_type == 'base':
                 prod_start_date = self.effective_date
                 rig = ['base']*num_days
             
-            if f.budget_type == 'wedge':
+            if budget_type == 'wedge':
                 forecast = load_forecast(self, p, f.prod_forecast_scenario, t_start, t_end)
                 if forecast.empty:
                     print('missing wedge forecast', p, f.prod_forecast_scenario, f.forecast)
                     df['scenario'][idx:idx+num_days] = np.nan
                     return
 
-            if f.budget_type == 'base':
+            if budget_type == 'base':
                 forecast = load_forecast(self, p, f.prod_forecast_scenario, t_start=None, t_end=None,
                                          eff_date=prod_start_date.strftime('%m/%d/%Y'),
                                          end_date=self.end_date.strftime('%m/%d/%Y'))
@@ -514,7 +520,7 @@ class Framework():
 
             df['scenario'][idx:idx+num_days] = [self.branch.scenario.scenario] * num_days
             df['idp'][idx:idx+num_days] = [p] * num_days
-            df['budget_type'][idx:idx+num_days] = [f.budget_type] * num_days
+            df['budget_type'][idx:idx+num_days] = [budget_flag] * num_days
             df['prod_date'][idx:idx+num_days] = self.date_range.values
             df['name'][idx:idx+num_days] = self.branch.model[p].well_name
             df['short_pad'][idx:idx+num_days] = self.branch.model[p].short_pad
@@ -526,7 +532,7 @@ class Framework():
                 pad_df = padding_df(forecast, (prod_start_date - self.effective_date).days)
                 time_on = np.concatenate([np.zeros(len(pad_df)), np.arange(1, len(forecast) + 1)])
                 forecast = pd.concat([pad_df, forecast])
-            elif f.budget_type == 'wedge':
+            elif budget_type == 'wedge':
                 time_on = np.arange(t_start + 1, len(forecast) + 1)
 
             if forecast.shape[0] < num_days:
@@ -575,13 +581,15 @@ class Framework():
 
                 inputs = {}
                 for i, val in e.__dict__.items():
-                    if 'inv' in i:
+                    if i == 'inv_g_misc':
+                        inputs[i] = capex_parser(val, self.effective_date, self.end_date)
+                    elif i in ('inv_g_drill', 'inv_g_compl'):
                         continue
-                    if i in ('wi_frac', 'nri_frac'):
+                    elif i in ('wi_frac', 'nri_frac'):
                         inputs[i] = econ_parser(i, val, self.effective_date,
-                                                self.effective_date, self.end_date)                       
+                                                self.effective_date, self.end_date)
                     else:
-                        if f.budget_type == 'wedge':
+                        if budget_type == 'wedge':
                             if i in ('cost_gtp', 'price_adj_gas', 'price_adj_oil', 'price_adj_ngl', 'cost_fixed', 'cost_fixed_alloc'):
                                 inputs[i] = econ_parser(i, val, self.effective_date,
                                                         self.branch.model[p].schedule.prod_start_date, self.end_date)
@@ -589,9 +597,9 @@ class Framework():
                                 inputs[i] = econ_parser(i, val, self.effective_date,
                                                         self.branch.model[p].schedule.drill_start_date,
                                                         self.end_date)
-                        if f.budget_type == 'base':
+                        if budget_type == 'base':
                             inputs[i] = econ_parser(i, val, self.effective_date,
-                                                    self.effective_date, self.end_date)                            
+                                                    self.effective_date, self.end_date)
 
                 df['ngl_yield'][idx:idx+num_days] = inputs['ngl_g_bpmm'].ngl_g_bpmm.values
                 df['btu'][idx:idx+num_days] = inputs['btu_factor'].btu_factor.values
@@ -618,7 +626,9 @@ class Framework():
                 df['ngl_price_adj'][idx:idx+num_days] = inputs['price_adj_ngl'].price_adj_ngl.values
                 df['ngl_adj_unit'][idx:idx+num_days] = inputs['price_adj_ngl'].unit.values
 
-                if f.budget_type == 'wedge':
+                df['gross_misc_capex'][idx:idx+num_days] = inputs['inv_g_misc'].inv_g_misc.values
+
+                if budget_type == 'wedge':
 
                     drill_start_date = self.branch.model[p].schedule.drill_start_date.date()
                     drill_end_date = drill_start_date + relativedelta(days=round(self.branch.model[p].schedule.drill_time, 0) - 1)
@@ -627,8 +637,11 @@ class Framework():
                                             (df['prod_date'] >= np.datetime64(drill_start_date)) &
                                             (df['prod_date'] <= np.datetime64(drill_end_date))] = alloc_drill_capex
 
+                    tmp_misc = df['gross_misc_capex'][(df['idp'] == p)
+                                                       & (df['prod_date'] == np.datetime64(drill_start_date))]
+
                     df['gross_misc_capex'][(df['idp'] == p)
-                                           & (df['prod_date'] == np.datetime64(drill_start_date))] = infra_cost
+                                           & (df['prod_date'] == np.datetime64(drill_start_date))] = tmp_misc + infra_cost
 
                     compl_start_date = self.branch.model[p].schedule.compl_start_date.date()
 
