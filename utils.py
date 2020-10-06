@@ -1037,8 +1037,19 @@ def delete_output(framework):
     conn = connect(framework.branch.tree.connection_dict)
     eng = engine(framework.branch.tree.connection_dict)
     cursor = conn.cursor()
-    query = str('delete from output '
-                'where scenario = \'' + framework.branch.scenario.scenario + '\'')
+    if framework.delete_all:
+        print('\ndeleting', framework.branch.scenario.scenario, 'from output table')
+        sys.stdout.flush()
+        query = str('delete from output '
+                    'where scenario = \'' + framework.branch.scenario.scenario + '\'')
+    else:
+        prop_list = framework.branch.properties.propnum.unique()
+        print('\ndeleting', len(prop_list), 'properties from output scenario', framework.branch.scenario.scenario)
+        sys.stdout.flush()
+        prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
+        query = str('delete from output '
+                    'where scenario = \'' + framework.branch.scenario.scenario + '\' '
+                    'and idp in (' + prop_list + ')')
     cursor.execute(query)
     conn.commit()
     cursor.close()

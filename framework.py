@@ -22,6 +22,7 @@ class Framework():
         self.economics = None
         self.uncertainty = None
         self.risk = None
+        self.delete_all = True
         self.mc_pop = False
         self.num_simulations = None
         self.econ_dists = []
@@ -278,8 +279,6 @@ class Framework():
 
     def run_populate(self):
         if not self.mc_pop:
-            print('\ndeleting scenario from output table')
-            sys.stdout.flush()
             delete_output(self)
         print('\npopulating')
         sys.stdout.flush()
