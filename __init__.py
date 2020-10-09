@@ -5,6 +5,7 @@ from .framework import Framework
 from .capacity import Capacity
 from .forecaster import Forecaster
 from .plotter import *
+# from .dash_test2 import run_server
 import time
 import pandas as pd
 import numpy as np
@@ -109,6 +110,30 @@ class Tree():
 ## Helper functions use primarily for multiprocessing ##
     def create_folders(self):
         create_dir(self)
+
+    def dash_test(self, branch_name):
+        branch = self.branches[branch_name]
+        start = time.time()
+        build_script_path = os.path.dirname(__file__)
+        python_path = sys.executable
+        print('preparing dash test')
+        p = subprocess.Popen(python_path + ' ' + build_script_path + '\\dash_test.py',
+                             stdout=subprocess.PIPE,
+                             universal_newlines=True)
+        for line in p.stdout:
+            print(line.rstrip())
+        while not os.path.exists('temp\\reload.pkl'):
+            time.sleep(5)
+        if os.path.isfile('temp\\reload.pkl'):
+            print('\nloading temp reload file')
+            self.branches['temp'] = load_object('temp\\reload')
+        print('cleaning up')
+        while os.path.exists('temp\\reload.pkl'):
+            try:
+                if os.path.isfile('temp\\reload.pkl'):
+                    os.remove('temp\\reload.pkl')
+            except PermissionError:
+                time.sleep(3)
 
     def build_output(self, branch_name):
         branch = self.branches[branch_name]
@@ -386,6 +411,12 @@ class Branch():
         save_prod_info(self.forecaster, overwrite)
         print('saving log')
         save_log(self.forecaster)
+
+    def dash_test(self):
+        save_object(self, 'temp\\load')
+        time.sleep(0.5)
+        self.tree.dash_test(self.name)
+        # run_server(self)
 
     def multigraph(self, properties=None):
         plot(self, properties)

@@ -2,8 +2,10 @@ from .utils import *
 from .forecaster import *
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
-import matplotlib.widgets as widget
+import dash
+import dash_core_components as dcc
+import dash_html_components as html
+import plotly.express as px
 
 def plot(branch, properties=None):
     run = True
@@ -25,19 +27,21 @@ def plot(branch, properties=None):
     fcst = True
     smooth = True
     prod_type = 'gas'
-    plt.ion()
-    f = plt.figure(figsize=(10, 4.666))
+
+    external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+
+    app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
     while plot == True:
 
         if plot_cmd == 'q':
-            plt.close()
+            # plt.close()
             print('closing plot\n')
             plot = False
 
         elif plot_cmd == 'n':
             if not plot_lock:
-                plt.clf()
+                # plt.clf()
                 prod = True
                 fcst = True
                 tmp_prod_info = None
@@ -187,7 +191,7 @@ def plot(branch, properties=None):
             tmp_fcst_dict = None
             prod = True
             fcst = True
-            plt.clf()
+            # plt.clf()
 
         elif plot_cmd == 's':
             if tmp_prod_info is None:
@@ -205,7 +209,7 @@ def plot(branch, properties=None):
                     tmp_fcst_dict = None
                     prod = True
                     fcst = True
-                    plt.clf()
+                    # plt.clf()
                 else:
                     print('\n')
                     pass
@@ -288,24 +292,46 @@ def plot(branch, properties=None):
                 print('forecast type:', well.forecasts.forecast_type)
                 print('type curve:', well.forecasts.forecast)
 
+            data = []
+
             if fcst:
                 if forecast.prod_date[0]:
                     idf = forecast[forecast.prod_date == last_prod_date].index[0]
-                    plt.plot(forecast.prod_date[idf:idf+500], forecast[prod_type][idf:idf+500])
+                    prod_fcst = go.Scatter(x=forecast.prod_date[idf:idf+500],
+                                           y=forecast[prod_type][idf:idf+500],
+                                           mode='lines', name='forecast')
+                    data.append(prod_fcst)
+                    # plt.plot(forecast.prod_date[idf:idf+500], forecast[prod_type][idf:idf+500])
                 else:
                     if p is not None:
                         x_range = pd.date_range(start=prod_start_date, periods=1000, freq='d')
-                        plt.plot(x_range, forecast[prod_type][:1000])
+                        prod_fcst = go.Scatter(x=x_range,
+                                               y=forecast[prod_type][:1000],
+                                               mode='lines', name='forecast')
+                        data.append(prod_fcst)                 
+                        # plt.plot(x_range, forecast[prod_type][:1000])
                     else:
-                        plt.plot(forecast['time_on'][:1000], forecast[prod_type][:1000])
+                        prod_fcst = go.Scatter(x=forecast['time_on'][:1000],
+                                               y=forecast[prod_type][:1000],
+                                               mode='lines', name='forecast')
+                        data.append(prod_fcst)
+                        # plt.plot(forecast['time_on'][:1000], forecast[prod_type][:1000])
 
             if tmp_fcst_dict is not None:
                 if p is None:
                     p = 0
                 if tmp_fcst_dict['prod_date'][0]:
-                    plt.plot(tmp_fcst_dict['prod_date'][p:p+500], tmp_fcst_dict[prod_type][p:p+500])
+                    tmp_prod_fcst = go.Scatter(x=tmp_fcst_dict['prod_date'][p:p+500],
+                                               y=tmp_fcst_dict[prod_type][p:p+500],
+                                               mode='lines', name='temp forecast')
+                    data.append(tmp_prod_fcst)
+                    # plt.plot(tmp_fcst_dict['prod_date'][p:p+500], tmp_fcst_dict[prod_type][p:p+500])
                 else:
-                    plt.plot(tmp_fcst_dict['time_on'][p:p+500], tmp_fcst_dict[prod_type][p:p+500])                        
+                    tmp_prod_fcst = go.Scatter(x=tmp_fcst_dict['time_on'][p:p+500],
+                                               y=tmp_fcst_dict[prod_type][p:p+500],
+                                               mode='lines', name='temp forecast')
+                    data.append(tmp_prod_fcst)
+                    # plt.plot(tmp_fcst_dict['time_on'][p:p+500], tmp_fcst_dict[prod_type][p:p+500])                        
 
             if prod and p:
                 if smooth:
@@ -319,10 +345,20 @@ def plot(branch, properties=None):
                         window = 30
                     print('smoothing window:', window)
                     prod_smooth = production[prod_type].rolling(window, center=True).mean()
-                    plt.plot(production.prod_date, prod_smooth,
-                                alpha=0.75, color='black')
-                plt.plot(production.prod_date, production[prod_type],
-                            alpha=0.75, color='slategray')
+                    prod_smooth = go.Scatter(x=production.prod_date,
+                                             y=prod_smooth,
+                                             mode='lines', name='smoothed production',
+                                             line=dict(color='black'), opacity=0.75)
+                    data.append(prod_smooth)
+                    # plt.plot(production.prod_date, prod_smooth,
+                    #             alpha=0.75, color='black')
+                prod = go.Scatter(x=production.prod_date,
+                                  y=production[prod_type],
+                                  mode='lines', name='production',
+                                  line=dict(color='slategray'), opacity=0.75)
+                data.append(prod)
+                # plt.plot(production.prod_date, production[prod_type],
+                #             alpha=0.75, color='slategray')
                 prod = False
 
             if prod_info:
@@ -342,15 +378,18 @@ def plot(branch, properties=None):
                                      'dmin: ' + str(prod_info['terminal_decline'][0]),
                                      'min rate: ' + str(prod_info['min_rate'][0]),
                                      'eur: ' + '{:,.0f}'.format(prod_info['eur'][0])))
-                props = dict(boxstyle='round', facecolor='white', alpha=0.25)
-                ax = plt.gca()
-                for txt in ax.texts:
-                    txt.set_visible(False)
-                textbox = ax.text(0.85, 0.95, textstr, transform=ax.transAxes, fontsize=10,
-                                  verticalalignment='top', bbox=props)
-            plt.ylim(1, 10000)
-            plt.yscale('log')
-            plt.tight_layout()
+                # props = dict(boxstyle='round', facecolor='white', alpha=0.25)
+                # ax = plt.gca()
+                # for txt in ax.texts:
+                #     txt.set_visible(False)
+                # textbox = ax.text(0.85, 0.95, textstr, transform=ax.transAxes, fontsize=10,
+                #                   verticalalignment='top', bbox=props)
+            # plt.ylim(1, 10000)
+            # plt.yscale('log')
+            # plt.tight_layout()
+            layout = dict(title='Title', xaxis=dict(title='Date'), yaxis=dict(title='Production', type='log'))
+            fig = dict(data=data, layout=layout)
+            iplot(fig)
             print('\n')
             plot_cmd = input(' (☞ﾟヮﾟ)☞ :  ')
 
