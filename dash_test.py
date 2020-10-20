@@ -30,6 +30,7 @@ class plot():
         self.new_fit = None
         self.new_hindcast = None
         self.initialized = False
+        self.config = {'toImageButtonOptions': {'width': 900, 'height': 600}}
         if not self.initialized:
             self.build_well_dropdown()
             self.get_idp()
@@ -171,23 +172,17 @@ class plot():
             self.prod_start_date = self.production.prod_date.min()
             self.last_prod_date = self.production.prod_date.max()
             try:
-                p = (self.last_prod_date - self.prod_start_date).days
+                d = (self.last_prod_date - self.prod_start_date).days
             except:
-                p = None
+                d = None
             
             fig = go.Figure()
-            fig.update_yaxes(type='log')
-            fig.update_layout(xaxis_title='date',
-                                yaxis_title=self.prod_type + ' production',
-                                height=600,
-                                font={'family': 'Arial Rounded MT',
-                                      'size': 16})
 
             if forecast.prod_date[0]:
                 self.idf = forecast[forecast.prod_date == self.last_prod_date].index[0]
                 sys.stdout.flush()
-                fig.add_trace(go.Scatter(x=forecast.prod_date[self.idf:self.idf+500],
-                                        y=forecast[self.prod_type][self.idf:self.idf+500],
+                fig.add_trace(go.Scatter(x=forecast.prod_date[self.idf:],
+                                        y=forecast[self.prod_type][self.idf:],
                                         line={'color': 'red'}, name='forecast'))
                 if self.forecast_type in ('auto', 'manual'):
                     print(self.forecast_type, self.type_curve, 'auto/manual forecast')
@@ -198,7 +193,7 @@ class plot():
                                              line={'color': 'red',
                                                    'dash': 'dash'}, opacity=0.5, name='hindcast'))   
                 else:
-                    print(self.forecast_type, self.type_curve, 'autotype/type forecast')
+                    print(self.forecast_type, self.type_curve, 'autotype forecast')
                     sys.stdout.flush()
                     hindcast = load_type_curve(self.well, self.type_curve)
                     hindcast = hindcast[:self.idf]
@@ -206,19 +201,23 @@ class plot():
                     fig.add_trace(go.Scatter(x=forecast.prod_date[:self.idf],
                                              y=hindcast[self.prod_type],
                                              line={'color': 'red',
-                                                   'dash': 'dash'}, opacity=0.5, name='hindcast'))   
+                                                   'dash': 'dash'}, opacity=0.5, name='hindcast'))
+                fig.update_xaxes(range=[forecast.prod_date[0], forecast.prod_date[self.idf+500]])
 
             else:
-                if p is not None:
-                    x_range = pd.date_range(start=self.prod_start_date, periods=1000, freq='d')
+                print(self.forecast_type, self.type_curve, 'type forecast')
+                if d is not None:
+                    x_range = pd.date_range(start=self.prod_start_date, periods=18250, freq='d')
                     fig.add_trace(go.Scatter(x=x_range,
-                                            y=forecast[self.prod_type][:1000],
-                                            line={'color': 'red'}, name='forecast'))
+                                            y=forecast[self.prod_type],
+                                            line={'color': 'red'}, name='type curve forecast', showlegend=True))
+                    fig.update_xaxes(range=[x_range[0], x_range[1000]])
                 else:
-                    fig.add_trace(go.Scatter(x=forecast['time_on'][:1000],
-                                            y=forecast[self.prod_type][:1000],
-                                            line={'color': 'red'}, name='forecast'))
-            if p is not None:
+                    fig.add_trace(go.Scatter(x=forecast['time_on'],
+                                            y=forecast[self.prod_type],
+                                            line={'color': 'red'}, name='type curve forecast', showlegend=True))
+                    fig.update_xaxes(range=[forecast['time_on'][0], forecast['time_on'][1000]])
+            if d is not None:
                 if self.production.shape[0] <= 30:
                     window = 3
                 elif self.production.shape[0] > 30 and self.production.shape[0] <= 240:
@@ -242,6 +241,54 @@ class plot():
             if self.new_hindcast is not None:
                 fig.add_trace(self.new_hindcast)
 
+            if forecast.prod_date[0]:
+                eur = self.tmp_prod_info['eur'][0]
+                textstr = '<br>'.join(('idp: ' + self.idp,
+                                    'name: ' + self.well.well_name,
+                                    'pad: ' + self.well.short_pad,
+                                    'pod: ' + self.well.pad,
+                                    'prod type: ' + self.prod_type,
+                                    'date of first production: '+ self.prod_start_date.strftime('%m/%d/%Y'),
+                                    'date of last production: ' + self.last_prod_date.strftime('%m/%d/%Y'),
+                                    'production length: ' + str(d) + ' days',
+                                    'eur: ' + '{:,.0f}'.format(eur)))
+            else:
+                eur = forecast[self.prod_type].sum()
+                textstr = '<br>'.join(('idp: ' + self.idp,
+                                    'name: ' + self.well.well_name,
+                                    'pad: ' + self.well.short_pad,
+                                    'pod: ' + self.well.pad,
+                                    'prod type: ' + self.prod_type,
+                                    'type curve: ' + self.type_curve,
+                                    'eur: ' + '{:,.0f}'.format(eur)))
+
+
+            sys.stdout.flush()
+            fig.update_yaxes(type='log')
+            fig.update_layout(xaxis_title='date',
+                              yaxis_title=self.prod_type + ' production',
+                              height=600,
+                              font={'family': 'Arial Rounded MT',
+                                    'size': 16},
+                              dragmode='pan',
+                              annotations=[
+                                  dict(
+                                      xref='paper',
+                                      yref='paper',
+                                      x=1.0,
+                                      y=0,
+                                      xshift=200,
+                                      text=textstr,
+                                      showarrow=False,
+                                      align='left',
+                                      yanchor='bottom',
+                                      bgcolor='rgba(255, 2525, 255, .8)'
+                                  )
+
+                              ]
+                                    
+                                    
+                                    )
             self.figure = fig
 
 
@@ -258,17 +305,12 @@ p = plot(b, properties, idx=0)
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+# app = dash.Dash(__name__)
 app.title = 'olive beta'
 
 app.layout = html.Div([
-    html.Div([
-        html.P(id='idx', children=str(str(p.idx + 1) + ' of ' + str(p.num_prop))),
-        html.P(id='well_name', children=p.well.well_name),
-        html.P(id='idp', children=p.idp),
-        html.P(id='short_pad', children=p.well.short_pad),
-        html.P(id='pad', children=p.well.pad),
-        html.P(id='prod_type', children=p.prod_type)]),
-    html.Div(id='plot_container', children=dcc.Graph(id='plot', figure=p.figure)),
+    html.Div(id='plot_container', children=dcc.Graph(id='plot', figure=p.figure, config=p.config)),
+    html.P(id='idx', children=str(str(p.idx + 1) + ' of ' + str(p.num_prop)), style={'font-weight': 'bold'}),
     html.Button('previous', id='prev_click', n_clicks=0),
     html.Button('next', id='next_click', n_clicks=0),
     html.Div([dcc.Input(id='input_idp', type='text', placeholder='enter idp'),
@@ -277,12 +319,12 @@ app.layout = html.Div([
         html.Div([html.P('forecast start date:'),
                 dcc.DatePickerSingle(id='input_start_date',
                                     date=p.start_date)]),
+        html.Div([html.P('initial rate:'),
+                dcc.Input(id='ip', type='number', min=1.0, placeholder=round(p.ip, 0))]),
         html.Div([html.P('b factor:'),
                 dcc.Input(id='b', type='number', min=0.0, max=2.0, placeholder=round(p.b, 2))]),
         html.Div([html.P('initial decline:'),
                 dcc.Input(id='di', type='number', min=0.1, max=0.99, placeholder=round(p.di, 2))]),
-        html.Div([html.P('initial rate:'),
-                dcc.Input(id='ip', type='number', min=1.0, placeholder=round(p.ip, 0))]),
         html.Div([html.P('terminal decline:'),
                 dcc.Input(id='dmin', type='number', min=0.05, max=0.25, placeholder=round(p.dmin, 2))]),
         html.Div([html.P('minimum rate:'),
@@ -297,22 +339,17 @@ app.layout = html.Div([
         html.Button('clear', id='submit_clear', n_clicks=0),
         html.Button('save', id='submit_save', n_clicks=0),
         html.Label(['well name', dcc.Dropdown(id='well_dropdown',
-            options=p.well_dropdown)], style={'width': '25%'})
+            options=p.well_dropdown)], style={'width': '400px'})
     ])
 
     ])
 
-@app.callback([Output('idx', 'children'),
-               Output('well_name', 'children'),
-               Output('idp', 'children'),
-               Output('short_pad', 'children'),
-               Output('pad', 'children'),
-               Output('prod_type', 'children'),
-               Output('plot_container', 'children'),
+@app.callback([Output('plot_container', 'children'),
+               Output('idx', 'children'),
                Output('input_start_date', 'date'),
+               Output('ip', 'placeholder'),
                Output('b', 'placeholder'),
                Output('di', 'placeholder'),
-               Output('ip', 'placeholder'),
                Output('dmin', 'placeholder'),
                Output('min_rate', 'placeholder'),
                Output('gas_yield', 'placeholder'),
@@ -328,9 +365,9 @@ app.layout = html.Div([
                Input('well_dropdown', 'value')],
               [State('input_idp', 'value'),
                State('input_start_date', 'date'),
+               State('ip', 'value'),
                State('b', 'value'),
                State('di', 'value'),
-               State('ip', 'value'),
                State('dmin', 'value'),
                State('min_rate', 'value'),
                State('gas_yield', 'value'),
@@ -338,10 +375,10 @@ app.layout = html.Div([
                State('water_yield', 'value')
                ])
 def change_figure(prev_btn, next_btn, plot_btn, update_btn, clear_btn,  save_btn,
-                  dropdown_idp, idp, start_date, b, di, ip, dmin, min_rate,
+                  dropdown_idp, idp, start_date, ip, b, di, dmin, min_rate,
                   gas_yield, oil_yield, water_yield):
     print(prev_btn, next_btn, plot_btn, update_btn, clear_btn, save_btn,
-          dropdown_idp, idp, start_date, b, di, ip, dmin, min_rate,
+          dropdown_idp, idp, start_date, ip, b, di, dmin, min_rate,
           gas_yield, oil_yield, water_yield)
     sys.stdout.flush()
     changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
@@ -422,6 +459,7 @@ def change_figure(prev_btn, next_btn, plot_btn, update_btn, clear_btn,  save_btn
                 and dmin >= 0.05 and dmin <= 0.25 and min_rate >= 1.0):
                 p.tmp_fcst_dict = manual_fit(p.well, start_date, p.production, p.tmp_yields_dict,
                                             p.prod_type, [b, di, ip], dmin, min_rate)
+                p.tmp_prod_info['eur'] = [p.tmp_fcst_dict[p.prod_type].sum()]
                 p.new_fit = go.Scatter(x=p.tmp_fcst_dict['prod_date'][p.idf:p.idf+500],
                                     y=p.tmp_fcst_dict[p.prod_type][p.idf:p.idf+500],
                                     line={'dash': 'dash',
@@ -431,6 +469,7 @@ def change_figure(prev_btn, next_btn, plot_btn, update_btn, clear_btn,  save_btn
                     hindcast, prod_date, time_on = p.get_hindcasts(use_tmp=True)
                     p.new_hindcast = go.Scatter(x=prod_date[:delta],
                                                 y=hindcast[:delta],
+                                                mode='lines',
                                                 line={'dash': 'dash',
                                                     'color': 'purple'}, opacity=0.5, name='new hindcast')
                 p.build_figure()
@@ -470,17 +509,12 @@ def change_figure(prev_btn, next_btn, plot_btn, update_btn, clear_btn,  save_btn
             p.build_figure()
             start_date = p.start_date
 
-    return (str(str(p.idx + 1) + ' of ' + str(p.num_prop)),
-            p.well.well_name,
-            p.idp,
-            p.well.short_pad,
-            p.well.pad,
-            p.prod_type,
-            dcc.Graph(id='plot', figure=p.figure),
+    return (dcc.Graph(id='plot', figure=p.figure, config=p.config),
+            str(str(p.idx + 1) + ' of ' + str(p.num_prop)),
             start_date,
+            round(p.ip, 0),
             round(p.b, 2),
             round(p.di, 2),
-            round(p.ip, 0),
             round(p.dmin, 2),
             round(p.min_rate, 0),
             round(p.gas_yield_placeholder, 1),
