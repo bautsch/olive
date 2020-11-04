@@ -822,7 +822,10 @@ class Framework():
                     econ_dists['avg_gas_price'][n] = df['realized_gas_price'][df['idp'] == p].mean()
                     econ_dists['avg_oil_price'][n] = df['realized_oil_price'][df['idp'] == p].mean()
                     econ_dists['avg_ngl_price'][n] = df['realized_ngl_price'][df['idp'] == p].mean()
-                    econ_dists['irr'][n] = xirr(df['fcf'][df['idp'] == p][start:end])
+                    if risk_uncertainty[p]['abandon'] is None:
+                        econ_dists['irr'][n] = xirr(df['fcf'][df['idp'] == p][start:end])
+                    else:
+                        econ_dists['irr'][n] = 0.0
                     try:
                         econ_dists['payout'][n] = np.where(df['fcf'][df['idp'] == p][start:end].cumsum() >= 0)[0][0] / (365.25/12)
                     except:

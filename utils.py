@@ -362,7 +362,7 @@ def load_properties(branch, idp=None, pad=None, short_pad=None,
                     'and economics.scenario = \'' + branch.scenario.economics + '\' '
                     'and forecasts.scenario = \'' + branch.scenario.forecast + '\' '
                     'and properties.active = 1 '
-                    'and forecasts.budget_type = \'' + budget_type + '\' '
+                    'and properties.budget_type = \'' + budget_type + '\' '
                     'and properties.prospect in (' + area_list + ')')
     if scenario is not None:
         query = str('select properties.* from properties ' +
@@ -371,7 +371,7 @@ def load_properties(branch, idp=None, pad=None, short_pad=None,
                     'where properties.scenario = \'' + scenario + '\' '
                     'and economics.scenario = \'' + branch.scenario.economics + '\' '
                     'and forecasts.scenario = \'' + branch.scenario.forecast + '\' '
-                    'and forecasts.budget_type = \'' + budget_type + '\' '
+                    'and properties.budget_type = \'' + budget_type + '\' '
                     'and properties.active = 1 ')
     if project is not None:
         query = str('select * from projects where scenario = \'' + project[0] + '\'')
@@ -1563,11 +1563,10 @@ def delete_prod_info(forecaster, overwrite, forecast_type):
         prop_list = filtered_props
     if not overwrite:
         connection = connect(forecaster.branch.tree.connection_dict)
-        prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
         query = str('select distinct idp from prod_forecasts '
                     'where scenario = \'' + forecaster.branch.scenario.forecast + '\'')
         idp_list = pd.read_sql(query, connection)['idp'].values
-        prop_list = [idp for idp in idp_list if idp not in prop_list]
+        prop_list = [idp for idp in prop_list if idp not in idp_list]
     if prop_list:
         print(len(prop_list), 'total forecast info onelines deleted')
         prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
@@ -1694,11 +1693,10 @@ def delete_prod_forecasts(forecaster, overwrite, forecast_type):
         prop_list = filtered_props
     if not overwrite:
         connection = connect(forecaster.branch.tree.connection_dict)
-        prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
         query = str('select distinct idp from prod_forecasts '
                     'where scenario = \'' + forecaster.branch.scenario.forecast + '\'')
         idp_list = pd.read_sql(query, connection)['idp'].values
-        prop_list = [idp for idp in idp_list if idp not in prop_list]
+        prop_list = [idp for idp in prop_list if idp not in idp_list]
     if prop_list:
         print(len(prop_list), 'total forecasts deleted')
         prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
