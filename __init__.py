@@ -392,7 +392,7 @@ class Branch():
         time.sleep(3)
         self.tree.monte_carlo(self.name)
 
-    def autofit(self, overwrite=False, forecast_type=None):
+    def autofit(self, overwrite=False, forecast_type=None, min_date=None):
         if self.forecaster is None:
             self.forecaster = Forecaster(self, overwrite, forecast_type)
         print('\nstarting autoforecaster')
@@ -515,10 +515,11 @@ class Branch():
         stop = time.time()
         timer(start, stop)
 
-    def build_output(self, uncertainty=None, risk=None, delete_all=True):
+    def build_output(self, uncertainty=None, risk=None, delete_all=True, increment=False):
         self.framework.uncertainty = uncertainty
         self.framework.risk = risk
         self.framework.delete_all = delete_all
+        self.framework.increment = increment
         print('\nsaving temp load file')
         save_object(self, 'temp\\load')
         time.sleep(3)
@@ -529,3 +530,30 @@ class Branch():
             print('saving branch pickle')
             name = self.scenario.scenario
         save_object(self, name)
+
+    def update(self, updates, filters=None):
+        do_not_proceed = True
+        while do_not_proceed is True:
+            plot_cmd = input('proceed with update? (y/n): ')
+            if plot_cmd not in ('yes', 'no', 'YES', 'NO', 'y', 'n', 'Y', 'N'):
+                print('invalid command')
+            else:
+                if plot_cmd in ('no', 'NO', 'n', 'N'):
+                    return
+                else:
+                    do_not_proceed = False
+        if filters is None:
+            do_not_proceed = True
+            while do_not_proceed is True:
+                plot_cmd = input(' NO FILTER CRITERA PROVIDED ARE YOU SURE YOU WANT TO PROCEED? (Y/N):  ')
+                if plot_cmd not in ('yes', 'no', 'YES', 'NO', 'y', 'n', 'Y', 'N'):
+                    print('invalid command')
+                else:
+                    if plot_cmd in ('no', 'NO', 'n', 'N'):
+                        return
+                    else:
+                        do_not_proceed = False
+        run_query(self, filters, updates)
+
+    def restore(self, uuid):
+        run_restore_query(self, uuid)

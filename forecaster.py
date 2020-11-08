@@ -168,7 +168,7 @@ class Forecaster():
                     print('preparing dataframe')
                     sys.stdout.flush()
                     if len(fits) > 1:
-                        fits = [pd.DataFrame(f) for f in fits if f is not None]
+                        fits = [pd.DataFrame(f) for f in fits if all(v is not None for v in f.values())]
                         fits = pd.concat(fits)
                     else:
                         fits = pd.DataFrame(fits[0])
@@ -204,7 +204,7 @@ class Forecaster():
                 print('preparing dataframe')
                 sys.stdout.flush()
                 if len(fits) > 1:
-                    fits = [pd.DataFrame(f) for f in fits if f is not None]
+                    fits = [pd.DataFrame(f) for f in fits if all(v is not None for v in f.values())]
                     fits = pd.concat(fits)
                 else:
                     fits = pd.DataFrame(fits[0])

@@ -1,6 +1,6 @@
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
+import uuid
 import operator
 import time
 import os
@@ -11,7 +11,6 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 from sqlalchemy import create_engine
-import time
 import pickle
 from dateutil.relativedelta import relativedelta
 from pandas.tseries.offsets import MonthEnd
@@ -1946,3 +1945,164 @@ def event_list(l, d, n):
             else:
                 e = int(i) + e
     return events
+
+def run_query(branch, filters, updates):
+    conn = connect(branch.tree.connection_dict)
+    eng = engine(branch.tree.connection_dict)
+        
+    start = time.time()
+    for table in updates.keys():
+        if table not in ('properties', 'economics', 'forecasts'):
+            print('only the properties, economics, and forecasts tables can be updated')
+        print('\nupdating table', table)
+        update_query = 'update ' + table + ' set '
+        select_query = 'select propnum, '
+        for column, value in updates[table].items():
+            if value[1] == 'string':
+                update_query = update_query + column + ' = \'' + str(value[0]) + '\', '
+            if value[1] == 'float':
+                update_query = update_query + column + ' = ' + str(value[0]) + ', '
+            if value[1] == 'literal':
+                update_query = update_query + column + ' = ' + value[0] + ', '
+            select_query = select_query + column + ', '
+        update_query = update_query[:-2]
+        update_query = update_query + ' from properties inner join economics on properties.propnum = economics.idp'
+        update_query = update_query + ' inner join forecasts on properties.propnum = forecasts.idp'
+        update_query = update_query + ' where properties.scenario = \'' + branch.scenario.properties + '\''
+        update_query = update_query + ' and economics.scenario = \'' + branch.scenario.economics + '\''
+        update_query = update_query + ' and forecasts.scenario = \'' + branch.scenario.forecast + '\''
+        select_query = select_query[:-2]
+        select_query = select_query + ' from properties inner join economics on properties.propnum = economics.idp'
+        select_query = select_query + ' inner join forecasts on properties.propnum = forecasts.idp'
+        select_query = select_query + ' where properties.scenario = \'' + branch.scenario.properties + '\''
+        select_query = select_query + ' and economics.scenario = \'' + branch.scenario.economics + '\''
+        select_query = select_query + ' and forecasts.scenario = \'' + branch.scenario.forecast + '\''
+        if filters is not None:
+            for tbl in filters.keys():
+                for column, value in filters[tbl].items():
+                    if value[2] == 'string':
+                        update_query = update_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' \'' + str(value[1]) + '\''
+                        select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' \'' + str(value[1]) + '\''
+                    if value[2] == 'float':
+                        update_query = update_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + str(value[1])
+                        select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + str(value[1])
+                    if value[2] == 'literal':
+                        update_query = update_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + value[1]
+                        select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + value[1]      
+        old_data = pd.read_sql(select_query, conn)
+        old_data = old_data.set_index('propnum').stack().reset_index()
+        old_data.rename(columns={'level_1': 'variable', 0: 'value'}, inplace=True)
+        old_data['change'] = 'original'
+        old_data['table_name'] = table
+        
+
+        cursor = conn.cursor()
+        cursor.execute(update_query)
+        conn.commit()
+        cursor.close()
+
+        new_data = pd.read_sql(select_query, conn)
+        new_data = new_data.set_index('propnum').stack().reset_index()
+        new_data.rename(columns={'level_1': 'variable', 0: 'value'}, inplace=True)
+        new_data['change'] = 'update'
+        new_data['table_name'] = table
+        
+        change_log = pd.concat([old_data, new_data])
+        if table == 'properties':
+            scenario = branch.scenario.properties
+        if table == 'economics':
+            scenario = branch.scenario.economics
+        if table == 'forecasts':
+            scenario = branch.scenario.forecast
+        change_log['scenario'] = scenario
+        change_log['updated_by'] = os.getlogin()
+        change_log['updated_on'] = pd.Timestamp(datetime.datetime.now())
+        change_log['uuid'] = str(uuid.uuid1())
+
+        insert_query = ('insert into change_log ([propnum], [variable], [value], [change], ' +
+                        '[table_name], [scenario], [updated_by], [updated_on], [uuid])')
+        insert_query = insert_query + ' values (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        cursor = conn.cursor()
+        cursor.executemany(insert_query, change_log.itertuples(index=False, name=None))
+        conn.commit()
+        cursor.close()
+
+        stop = time.time()
+        timer(start, stop)
+    return
+
+def run_restore_query(branch, uuid_list):
+    conn = connect(branch.tree.connection_dict)
+    eng = engine(branch.tree.connection_dict)
+    if type(uuid_list) != list:
+        uuid_list = [uuid_list]
+    for uid in uuid_list:
+        print('restoring inputs for', uid)
+        query = ('select propnum, variable, ' +
+                 'value, change, table_name, ' +
+                 'scenario from change_log ' +
+                 'where change = \'original\' and uuid = \'' + uid + '\'')
+        new_data = pd.read_sql(query, conn)
+        table_name = new_data.table_name.unique()[0]
+        scenario = new_data.scenario.unique()[0]
+        columns = new_data.variable.unique()
+        df = new_data[['propnum', 'variable', 'value']]
+        num_prop = len(df.propnum.unique())
+
+        prop_list = ', '.join('\'{0}\''.format(p) for p in new_data.propnum.unique())
+        if table_name == 'properties':
+            change_query = 'select propnum, '
+        else:
+            change_query = 'select idp, '
+        for c in columns:
+            change_query = change_query + c + ', '
+        change_query = change_query[:-2]
+        change_query = change_query + ' from ' + table_name + ' where scenario = \'' + scenario + '\''
+        if table_name == 'properties':
+            change_query = change_query + ' and propnum in (' + prop_list + ')'
+        else:
+            change_query = change_query + ' and idp in (' + prop_list + ')'
+        old_data = pd.read_sql(change_query, conn)
+        old_data.rename(columns={'idp': 'propnum'}, inplace=True)
+        old_data = old_data.set_index('propnum').stack().reset_index()
+        old_data.rename(columns={'level_1': 'variable', 0: 'value'}, inplace=True)
+        old_data['change'] = 'original'
+        old_data['table_name'] = table_name
+        if table_name == 'properties':
+            scenario = branch.scenario.properties
+        if table_name == 'economics':
+            scenario = branch.scenario.economics
+        if table_name == 'forecasts':
+            scenario = branch.scenario.forecast
+        old_data['scenario'] = scenario
+        new_data['change'] = 'restore'
+        change_log = pd.concat([old_data, new_data])
+        change_log['updated_by'] = os.getlogin()
+        change_log['updated_on'] = pd.Timestamp(datetime.datetime.now())
+        change_log['uuid'] = str(uuid.uuid1())
+        change_log.to_csv('test.csv')
+
+        insert_query = ('insert into change_log ([propnum], [variable], [value], [change], ' +
+                        '[table_name], [scenario], [updated_by], [updated_on], [uuid])')
+        insert_query = insert_query + ' values (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        cursor = conn.cursor()
+        cursor.executemany(insert_query, change_log.itertuples(index=False, name=None))
+        conn.commit()
+        cursor.close()
+
+        for i, p in enumerate(df.propnum.unique()):
+            # print('table', table_name, 'scenario', scenario, 'property', p, i+1, 'of', num_prop)
+            query = 'update ' + table_name + ' set '
+            for column in df[df.propnum == p].variable.unique():
+                value = df[(df.propnum == p) & (df.variable == column)].value.values[0]
+                query = query + column + ' = ' + value + ', '
+            query = query[:-2]
+            if table_name == 'properties':
+                query = query + ' where propnum = \'' + p + '\''
+            else:
+                query = query + ' where idp = \'' + p + '\''
+            query = query + ' and scenario = \'' + scenario + '\''
+            cursor = conn.cursor()
+            cursor.execute(query)
+            conn.commit()
+            cursor.close()
