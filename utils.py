@@ -2,6 +2,7 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import uuid
 import operator
+import calendar
 import time
 import os
 import sys
@@ -795,7 +796,11 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
     date_range = pd.date_range(effective_date, end_date, freq='D')
     prod_start_date = pd.Timestamp(prod_start_date.date())
     tmp_econ_df.prod_date = date_range
-    tmp_econ_df.eomonth = tmp_econ_df.prod_date + MonthEnd(1)
+    eomonth = []
+    for d in date_range:
+        day = calendar.monthrange(d.year, d.month)[1]
+        eomonth.append(datetime.datetime(d.year, d.month, day))
+    tmp_econ_df.eomonth = pd.to_datetime(pd.Series(eomonth))
     try:
         param = float(param)
         tmp_econ_df[param_name] = param
@@ -812,6 +817,7 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
         except:
             params = param.split(' ')
             _iter = enumerate(params)
+            prior_date = None
             for i, p in _iter:
                 if i == 0:
 
@@ -822,6 +828,7 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                             continue
                         except:
                             print('first value must be float, provided', p.strip('%'))
+                            sys.stdout.flush()
                         return
                     else:
                         try:
@@ -830,6 +837,7 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                             continue
                         except:
                             print('first value must be float, provided', p)
+                            sys.stdout.flush()
                         return
 
                 else:
@@ -841,17 +849,21 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                             other_val = params[i+4]
                         except:
                             print('missing values after if')
+                            sys.stdout.flush()
                             return
                         if op_val not in ops.keys():
                             print('invalid operator')
+                            sys.stdout.flush()
                             return
                         try:
                             date_val = pd.Timestamp(date_val)
                         except:
                             print('invalid date value', date_val)
+                            sys.stdout.flush()
                             return
                         if else_op != 'else':
                             print('invalid syntax', else_op)
+                            sys.stdout.flush()
                             return
                         if '%' in other_val:
                             try:
@@ -859,6 +871,7 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                                 other_unit = 'pct'
                             except:
                                 print('invalid alternate value', other_val.strip('%'))
+                                sys.stdout.flush()
                                 return
                         else:
                             try:
@@ -866,6 +879,7 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                                 other_unit = 'per'
                             except:
                                 print('invalid alternate value', other_val)
+                                sys.stdout.flush()
                                 return
                         if not ops[op_val](prod_start_date, date_val):
                             start_val = other_val
@@ -884,14 +898,18 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                             next_val = params[i+3]
                         except:
                             print('missing values after until')
+                            sys.stdout.flush()
                             return
                         try:
                             date_val = pd.Timestamp(date_val)
+                            sys.stdout.flush()
                         except:
                             print('invalid date value', date_val)
+                            sys.stdout.flush()
                             return
                         if then_op != 'then':
                             print('invalid syntax', then_op)
+                            sys.stdout.flush()
                             return
                         if '%'  in next_val:
                             try:
@@ -899,20 +917,27 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                                 next_unit = 'pct'
                             except:
                                 print('invalid next value', next_val.strip('%'))
+                                sys.stdout.flush()
                         else:
                             try:
                                 next_val = float(next_val)
                                 next_unit = 'per'
                             except:
                                 print('invalid next value', next_val)
+                                sys.stdout.flush()
                                 return
                         mask = operator.le(date_range, date_val)
+                        antimask = ~mask
+                        if prior_date is not None:
+                            mask = (operator.gt(date_range, prior_date) & operator.le(date_range, date_val))
+                            antimask = operator.gt(date_range, date_val)
                         tmp_econ_df.loc[mask, param_name] = start_val
                         tmp_econ_df.loc[mask, 'unit'] = start_unit
-                        tmp_econ_df.loc[~mask, param_name] = next_val
-                        tmp_econ_df.loc[~mask, 'unit'] = next_unit
+                        tmp_econ_df.loc[antimask, param_name] = next_val
+                        tmp_econ_df.loc[antimask, 'unit'] = next_unit
                         start_val = next_val
                         start_unit = next_unit
+                        prior_date = date_val
                         _ = next(_iter)
                         _ = next(_iter)
                         _ = next(_iter)
@@ -925,15 +950,18 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                             next_val = params[i+4]
                         except:
                             print('missing values after for')
+                            sys.stdout.flush()
                         try:
                             time_val = int(time_val)
                         except:
                             print('invalid time value', time_val)
+                            sys.stdout.flush()
                             return
                         if unit_val not in ('d', 'day', 'days',
                                             'mo', 'mos', 'month', 'months',
                                             'y', 'yr', 'yrs', 'year', 'years'):
                             print('unknown date unit', unit_val)
+                            sys.stdout.flush()
                             return
                         if '%'  in next_val:
                             try:
@@ -941,12 +969,14 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                                 next_unit = 'pct'
                             except:
                                 print('invalid next value', next_val.strip('%'))
+                                sys.stdout.flush()
                         else:
                             try:
                                 next_val = float(next_val)
                                 next_unit = 'per'
                             except:
                                 print('invalid next value', next_val)
+                                sys.stdout.flush()
                                 return
                         if unit_val in ('d', 'day', 'days'):
                             delta = relativedelta(days=time_val)
@@ -1006,6 +1036,44 @@ def capex_parser(param, effective_date, end_date):
                 return tmp_df
             tmp_df.loc[tmp_df.prod_date == p_date, 'inv_g_misc'] = p_cap
     return tmp_df
+
+def aban_capex_parser(param, effective_date, end_date):
+    tmp_df = pd.DataFrame(columns=['prod_date', 'eomonth', 'inv_g_aban'])
+    date_range = pd.date_range(effective_date, end_date, freq='D')
+    tmp_df.prod_date = date_range
+    tmp_df.eomonth = tmp_df.prod_date + MonthEnd(1)
+    tmp_df.inv_g_misc = 0.0
+    params = param.split(',')
+    for p in params:
+        p_split = p.split(' ')
+        if len(p_split) == 1:
+            try:
+                p_split = float(p_split[0])
+                if p_split > 0.001:
+                    print('misc capex with no date provided')
+                    return tmp_df
+                else:
+                    return tmp_df
+            except:
+                print('bad misc capex')
+                return tmp_df
+        if len(p_split) > 1:
+            try:
+                p_cap = float(p_split[0])
+            except:
+                print('capex not float')
+                return tmp_df
+            if p_split[1] != 'on':
+                print('invalid syntax, missing \'on\'')
+                return tmp_df
+            try:
+                p_date = pd.Timestamp(p_split[2])
+            except:
+                print('invalid date')
+                return tmp_df
+            tmp_df.loc[tmp_df.prod_date == p_date, 'inv_g_misc'] = p_cap
+    return tmp_df
+
 
 def load_output_from_sql(branch, scenario_name):
     conn = connect(branch.tree.connection_dict)
@@ -1994,7 +2062,6 @@ def run_query(branch, filters, updates):
         old_data.rename(columns={'level_1': 'variable', 0: 'value'}, inplace=True)
         old_data['change'] = 'original'
         old_data['table_name'] = table
-        
 
         cursor = conn.cursor()
         cursor.execute(update_query)

@@ -616,7 +616,7 @@ class Framework():
                                                 self.effective_date, self.end_date)
                     else:
                         if budget_type == 'wedge':
-                            if i in ('cost_gtp', 'price_adj_gas', 'price_adj_oil',
+                            if i in ('ngl_g_bpmm', 'cost_gtp', 'price_adj_gas', 'price_adj_oil',
                                      'price_adj_ngl', 'cost_fixed', 'cost_fixed_alloc'):
                                 inputs[i] = econ_parser(i, val, self.effective_date,
                                                         self.branch.model[p].schedule.prod_start_date, self.end_date)
@@ -801,7 +801,9 @@ class Framework():
                     neg_fcf_mask = df['fcf'] < 0.0
                     combined_mask = (fcf_mask & neg_fcf_mask)
                     first_neg = np.argmax(combined_mask == True)
-                    combined_mask[first_neg:first_neg+self.min_life] = False
+                    if first_neg < self.min_life:
+                        last_neg = self.min_life - first_neg
+                        combined_mask[first_neg:last_neg] = False
                     df['fcf'][combined_mask] = 0.0
                     df['fixed_cost'][combined_mask] = 0.0
                     df['alloc_fixed_cost'][combined_mask] = 0.0
