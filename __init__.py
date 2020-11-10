@@ -426,7 +426,7 @@ class Branch():
         save_to_excel(self, file_path='archive')
         save_to_excel(self, file_path='main')
 
-    def add_properties(self, idp=None, pad=None, short_pad=None,
+    def add_properties(self, idp=None, pad=None, short_pad=None, grouping=None,
                        area=None, scenario=None, project=None):
         if idp is not None:
             print('\nadding properties by id')
@@ -446,6 +446,12 @@ class Branch():
         elif area is not None:
             print('\nadding properties by area:\t\t' + ', '.join(a for a in area))
             properties = load_properties(self, area=area)
+        elif grouping is not None:
+            if type(grouping) == list:
+                print('\nadding properties by grouping:\t\t' + ', '.join(g for g in grouping))
+            else:
+                print('\nadding properties by grouping:\t\t' + grouping)
+            properties = load_properties(self, grouping=grouping)
         elif self.scenario.area is not None:
             print('\nadding properties by area:\t\t' + ', '.join(a for a in area))
             properties = load_properties(self, area=area)            

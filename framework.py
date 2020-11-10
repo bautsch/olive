@@ -191,48 +191,55 @@ class Framework():
 
     def load_pricing(self):
         print('initializing price deck')
-        self.price_deck = load_price_deck(self)
-        min_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.min()]
-        max_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.max()]
-        p = self.price_deck[(self.price_deck.prod_date >= self.effective_date) &
-                            (self.price_deck.prod_date <= self.end_date)]
+        gas_check = True
+        while gas_check:
+            self.price_deck = load_price_deck(self)
+            min_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.min()]
+            max_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.max()]
+            p = self.price_deck[(self.price_deck.prod_date >= self.effective_date) &
+                                (self.price_deck.prod_date <= self.end_date)]
 
-        temp_price_df = pd.DataFrame({'prod_date': self.date_range,
-                                      'input_gas_price': np.empty(len(self.date_range)),
-                                      'input_oil_price': np.empty(len(self.date_range)),
-                                      'input_ngl_price': np.empty(len(self.date_range))
-                                      })
+            temp_price_df = pd.DataFrame({'prod_date': self.date_range,
+                                        'input_gas_price': np.empty(len(self.date_range)),
+                                        'input_oil_price': np.empty(len(self.date_range)),
+                                        'input_ngl_price': np.empty(len(self.date_range))
+                                        })
 
-        temp_price_df.loc[(temp_price_df.prod_date >= p.prod_date.min()) &
-                           (temp_price_df.prod_date <= p.prod_date.max()),
-                           'input_gas_price'] = p.gas_price.values
-        temp_price_df.loc[(temp_price_df.prod_date >= p.prod_date.min()) &
-                           (temp_price_df.prod_date <= p.prod_date.max()),
-                           'input_oil_price'] = p.oil_price.values
-        temp_price_df.loc[(temp_price_df.prod_date >= p.prod_date.min()) &
-                           (temp_price_df.prod_date <= p.prod_date.max()),
-                           'input_ngl_price'] = p.ngl_price.values
+            temp_price_df.loc[(temp_price_df.prod_date >= p.prod_date.min()) &
+                            (temp_price_df.prod_date <= p.prod_date.max()),
+                            'input_gas_price'] = p.gas_price.values
+            temp_price_df.loc[(temp_price_df.prod_date >= p.prod_date.min()) &
+                            (temp_price_df.prod_date <= p.prod_date.max()),
+                            'input_oil_price'] = p.oil_price.values
+            temp_price_df.loc[(temp_price_df.prod_date >= p.prod_date.min()) &
+                            (temp_price_df.prod_date <= p.prod_date.max()),
+                            'input_ngl_price'] = p.ngl_price.values
 
-        temp_price_df.loc[(temp_price_df.input_gas_price < 0.01) &
-                           (temp_price_df.prod_date < min_prices.prod_date.values[0]),
-                           'input_gas_price'] = min_prices.gas_price.values[0]
-        temp_price_df.loc[(temp_price_df.input_oil_price < 0.01) &
-                           (temp_price_df.prod_date < min_prices.prod_date.values[0]),
-                           'input_oil_price'] = min_prices.oil_price.values[0]
-        temp_price_df.loc[(temp_price_df.input_ngl_price < 0.01) &
-                           (temp_price_df.prod_date < min_prices.prod_date.values[0]),
-                           'input_ngl_price'] = min_prices.ngl_price.values[0]
+            temp_price_df.loc[(temp_price_df.input_gas_price < 0.01) &
+                            (temp_price_df.prod_date < min_prices.prod_date.values[0]),
+                            'input_gas_price'] = min_prices.gas_price.values[0]
+            temp_price_df.loc[(temp_price_df.input_oil_price < 0.01) &
+                            (temp_price_df.prod_date < min_prices.prod_date.values[0]),
+                            'input_oil_price'] = min_prices.oil_price.values[0]
+            temp_price_df.loc[(temp_price_df.input_ngl_price < 0.01) &
+                            (temp_price_df.prod_date < min_prices.prod_date.values[0]),
+                            'input_ngl_price'] = min_prices.ngl_price.values[0]
 
-        temp_price_df.loc[(temp_price_df.input_gas_price < 0.01) &
-                           (temp_price_df.prod_date > max_prices.prod_date.values[0]),
-                           'input_gas_price'] = max_prices.gas_price.values[0]
-        temp_price_df.loc[(temp_price_df.input_oil_price < 0.01) &
-                           (temp_price_df.prod_date > max_prices.prod_date.values[0]),
-                           'input_oil_price'] = max_prices.oil_price.values[0]
-        temp_price_df.loc[(temp_price_df.input_ngl_price < 0.01) &
-                           (temp_price_df.prod_date > max_prices.prod_date.values[0]),
-                           'input_ngl_price'] = max_prices.ngl_price.values[0]
-        self.price_deck = temp_price_df
+            temp_price_df.loc[(temp_price_df.input_gas_price < 0.01) &
+                            (temp_price_df.prod_date > max_prices.prod_date.values[0]),
+                            'input_gas_price'] = max_prices.gas_price.values[0]
+            temp_price_df.loc[(temp_price_df.input_oil_price < 0.01) &
+                            (temp_price_df.prod_date > max_prices.prod_date.values[0]),
+                            'input_oil_price'] = max_prices.oil_price.values[0]
+            temp_price_df.loc[(temp_price_df.input_ngl_price < 0.01) &
+                            (temp_price_df.prod_date > max_prices.prod_date.values[0]),
+                            'input_ngl_price'] = max_prices.ngl_price.values[0]
+            self.price_deck = temp_price_df
+            if any(self.price_deck.input_gas_price > 5):
+                print('gas price failed verification reloading')
+            else:
+                print('price deck verification succeed')
+                gas_check = False
 
     def run_mc(self):
         start = time.time()
@@ -379,10 +386,9 @@ class Framework():
                  'net_gas_rev', 'net_oil_rev',
                  'net_ngl_rev', 'net_total_rev',
                  'gross_drill_capex', 'gross_compl_capex',
-                 'gross_misc_capex',
-                 'gross_total_capex', 'net_drill_capex',
-                 'net_compl_capex', 
-                 'net_misc_capex', 'net_total_capex',
+                 'gross_misc_capex', 'gross_aban_capex', 'gross_total_capex',
+                 'net_drill_capex', 'net_compl_capex', 'net_misc_capex', 
+                 'net_aban_capex', 'net_total_capex',
                  'fixed_cost', 'alloc_fixed_cost', 'var_gas_cost', 'var_oil_cost',
                  'var_water_cost', 'doe', 'gtp', 'tax_rate',
                  'taxes', 'loe', 'cf', 'fcf', 'cum_fcf', 'pv1', 'pv1_rate',
@@ -608,8 +614,8 @@ class Framework():
                 inputs = {}
                 for i, val in e.__dict__.items():
                     if i == 'inv_g_misc':
-                        inputs[i] = capex_parser(val, self.effective_date, self.end_date)
-                    elif i in ('inv_g_drill', 'inv_g_compl'):
+                        inputs[i] = misc_capex_parser(val, self.effective_date, self.end_date)
+                    elif i in ('inv_g_drill', 'inv_g_compl', 'inv_g_aban'):
                         continue
                     elif i in ('wi_frac', 'nri_frac', 'roy_frac', 'gross_gas_mult', 'gross_oil_mult', 'gross_water_mult'):
                         inputs[i] = econ_parser(i, val, self.effective_date,
@@ -649,6 +655,8 @@ class Framework():
                 df['net_oil'][idx:idx+num_days] = df['gross_oil'][idx:idx+num_days] * df['nri'][idx:idx+num_days]
                 df['net_ngl'][idx:idx+num_days] = (df['gross_gas'][idx:idx+num_days] * df['ngl_yield'][idx:idx+num_days] *
                                                    df['nri'][idx:idx+num_days] / 1000)
+                df['net_mcfe'][idx:idx+num_days] = (df['net_gas'][idx:idx+num_days] + df['net_oil'][idx:idx+num_days] * 6 +
+                                                    df['net_ngl'][idx:idx+num_days] * 6)
                 df['royalty_gas'][idx:idx+num_days] = (df['gross_gas'][idx:idx+num_days] * df['royalty'][idx:idx+num_days] *
                                                        df['shrink'][idx:idx+num_days])
                 df['royalty_oil'][idx:idx+num_days] = df['gross_oil'][idx:idx+num_days] * df['royalty'][idx:idx+num_days]
@@ -665,6 +673,14 @@ class Framework():
                 df['ngl_adj_unit'][idx:idx+num_days] = inputs['price_adj_ngl'].unit.values
 
                 df['gross_misc_capex'][idx:idx+num_days] = inputs['inv_g_misc'].inv_g_misc.values
+
+                # idp_mask = (df['idp'] == p)
+                # gas_pct_adj = (df['gas_adj_unit'] == 'pct')
+                # gas_per_adj = (df['gas_adj_unit'] == 'per')
+                # gas_pct_mask = np.logical_and(idp_mask, gas_pct_adj)
+                # gas_per_adj = np.logical_and(idp_mask, gas_per_adj)
+                # print(df['realized_gas_price'][gas_pct_mask])
+                # sys.stdout.flush()
 
                 if budget_type == 'wedge':
 
@@ -744,8 +760,6 @@ class Framework():
 
         if not self.production_only:
 
-            df['net_mcfe'] = df['net_gas'] + (df['net_oil'] + df['net_ngl']) * 6
-
             df['realized_gas_price'][df['gas_adj_unit'] == 'pct'] = (df['input_gas_price'][df['gas_adj_unit'] == 'pct'] *
                                                                      df['gas_price_adj'][df['gas_adj_unit'] == 'pct'])
 
@@ -798,15 +812,50 @@ class Framework():
                     fcf_mask = ((df['idp'] == p) &
                                 (df['prod_date'] >= np.datetime64(prod_start_date)) &
                                 (df['net_total_capex'] < 0.01))
-                    neg_fcf_mask = df['fcf'] < 0.0
-                    combined_mask = (fcf_mask & neg_fcf_mask)
-                    first_neg = np.argmax(combined_mask == True)
-                    if first_neg < self.min_life:
-                        last_neg = self.min_life - first_neg
-                        combined_mask[first_neg:last_neg] = False
-                    df['fcf'][combined_mask] = 0.0
-                    df['fixed_cost'][combined_mask] = 0.0
-                    df['alloc_fixed_cost'][combined_mask] = 0.0
+                    neg_fcf_mask = df['fcf'] < -100
+                    combined_mask = np.logical_and(fcf_mask, neg_fcf_mask)
+                    if sum(combined_mask) > 1 or sum(df['fcf'][fcf_mask]) < 100:
+                        first_neg = np.argmax(combined_mask == True)
+                        first_neg_date = df['prod_date'][first_neg]
+                        min_life_date = self.effective_date + relativedelta(days=self.min_life)
+                        if first_neg_date < min_life_date:
+                            end_of_life = min_life_date
+                        else:
+                            end_of_life = first_neg_date
+                        # if p == 'M9TEG9FCFT':
+                        #     np.savetxt('tes.csv', df['gross_gas'][df['idp'] == p])
+                        #     print(p, end_of_life, min_date)
+                        #     sys.stdout.flush()
+                        idp_mask = (df['idp'] == p)
+                        date_mask = (pd.to_datetime(pd.Series(df['prod_date'])) >= end_of_life)
+                        combined_mask = np.logical_and(idp_mask, date_mask)
+                        for k in df.keys():
+                            if k in ('scenario', 'idp', 'prod_date', 'budget_type',
+                                    'name', 'short_pad', 'pad', 'rig', 'area', 'time_on',
+                                    'gas_price_adj', 'oil_price_adj', 'ngl_price_adj', 'created_on', 'created_by'):
+                                continue
+                            else:
+                                df[k][combined_mask] = 0.0
+
+                        wi_frac = self.economics[p].__dict__['wi_frac']
+                        aban_val = self.economics[p].__dict__['inv_g_aban']
+                        if aban_val is not None:
+                            aban = aban_capex_parser(aban_val, end_of_life, self.effective_date, self.end_date)
+                            wi = econ_parser('wi_frac', wi_frac, self.effective_date, self.effective_date, self.end_date)
+                            if len(df['gross_aban_capex'][df['idp'] == p]) == 0:
+                                print(p, 'no output data to apply abandonment')
+                                sys.stdout.flush()
+                            else:
+                                df['gross_aban_capex'][df['idp'] == p] = aban.inv_g_aban.values
+                                df['gross_total_capex'][df['idp'] == p] = (df['gross_total_capex'][df['idp'] == p] + 
+                                                                        df['gross_aban_capex'][df['idp'] == p])
+                                df['net_aban_capex'][df['idp'] == p] = aban.inv_g_aban.values * wi.wi_frac.values
+                                df['net_total_capex'][df['idp'] == p] = (df['net_total_capex'][df['idp'] == p] + 
+                                                                        df['net_aban_capex'][df['idp'] == p])
+                                df['cf'][df['idp'] == p] = (df['cf'][df['idp'] == p] - 
+                                                            df['net_aban_capex'][df['idp'] == p])
+                                df['fcf'][df['idp'] == p] = (df['fcf'][df['idp'] == p] - 
+                                                            df['net_aban_capex'][df['idp'] == p])
 
                     if self.start_discount == 'eff':
                         for i in range(10):
@@ -1125,6 +1174,7 @@ class Well_Econ():
         self.inv_g_drill = None
         self.inv_g_compl = None
         self.inv_g_misc = None
+        self.inv_g_aban = None
         self.price_adj_gas = None
         self.price_adj_oil = None
         self.price_adj_ngl = None

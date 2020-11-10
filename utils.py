@@ -313,7 +313,7 @@ def load_schedule_properties(schedule):
                 'and pad in (' + pad_list + ')')
     return pd.read_sql(query, conn)
 
-def load_properties(branch, idp=None, pad=None, short_pad=None, 
+def load_properties(branch, idp=None, pad=None, short_pad=None, grouping=None,
                     area=None, scenario=None, project=None, budget_type='base'):
     conn = connect(branch.tree.connection_dict)
     if idp is not None:
@@ -372,6 +372,19 @@ def load_properties(branch, idp=None, pad=None, short_pad=None,
                     'and economics.scenario = \'' + branch.scenario.economics + '\' '
                     'and forecasts.scenario = \'' + branch.scenario.forecast + '\' '
                     'and properties.budget_type = \'' + budget_type + '\' '
+                    'and properties.active = 1 ')
+    if grouping is not None:
+        if type(grouping) == list:
+            grouping_list = ', '.join('\'{0}\''.format(g) for g in grouping)
+        else:
+            grouping_list = '\'' + grouping + '\''
+        query = str('select properties.* from properties ' +
+                    'inner join economics on properties.propnum = economics.idp '
+                    'inner join forecasts on economics.idp = forecasts.idp '
+                    'where properties.scenario = \'' + branch.scenario.properties + '\' '
+                    'and economics.scenario = \'' + branch.scenario.economics + '\' '
+                    'and forecasts.scenario = \'' + branch.scenario.forecast + '\' '
+                    'and properties.grouping in (' + grouping_list + ') '
                     'and properties.active = 1 ')
     if project is not None:
         query = str('select * from projects where scenario = \'' + project[0] + '\'')
@@ -1000,11 +1013,15 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
     tmp_econ_df.loc[tmp_econ_df.prod_date < prod_start_date, param_name] = 0.0
     return tmp_econ_df
 
-def capex_parser(param, effective_date, end_date):
+def misc_capex_parser(param, effective_date, end_date):
     tmp_df = pd.DataFrame(columns=['prod_date', 'eomonth', 'inv_g_misc'])
     date_range = pd.date_range(effective_date, end_date, freq='D')
     tmp_df.prod_date = date_range
-    tmp_df.eomonth = tmp_df.prod_date + MonthEnd(1)
+    eomonth = []
+    for d in date_range:
+        day = calendar.monthrange(d.year, d.month)[1]
+        eomonth.append(datetime.datetime(d.year, d.month, day))
+    tmp_df.eomonth = pd.to_datetime(pd.Series(eomonth))
     tmp_df.inv_g_misc = 0.0
     params = param.split(',')
     for p in params:
@@ -1037,41 +1054,46 @@ def capex_parser(param, effective_date, end_date):
             tmp_df.loc[tmp_df.prod_date == p_date, 'inv_g_misc'] = p_cap
     return tmp_df
 
-def aban_capex_parser(param, effective_date, end_date):
+def aban_capex_parser(param, end_of_life, effective_date, end_date):
     tmp_df = pd.DataFrame(columns=['prod_date', 'eomonth', 'inv_g_aban'])
     date_range = pd.date_range(effective_date, end_date, freq='D')
     tmp_df.prod_date = date_range
-    tmp_df.eomonth = tmp_df.prod_date + MonthEnd(1)
-    tmp_df.inv_g_misc = 0.0
-    params = param.split(',')
-    for p in params:
-        p_split = p.split(' ')
-        if len(p_split) == 1:
-            try:
-                p_split = float(p_split[0])
-                if p_split > 0.001:
-                    print('misc capex with no date provided')
-                    return tmp_df
-                else:
-                    return tmp_df
-            except:
-                print('bad misc capex')
-                return tmp_df
-        if len(p_split) > 1:
-            try:
-                p_cap = float(p_split[0])
-            except:
-                print('capex not float')
-                return tmp_df
-            if p_split[1] != 'on':
-                print('invalid syntax, missing \'on\'')
-                return tmp_df
-            try:
-                p_date = pd.Timestamp(p_split[2])
-            except:
-                print('invalid date')
-                return tmp_df
-            tmp_df.loc[tmp_df.prod_date == p_date, 'inv_g_misc'] = p_cap
+    eomonth = []
+    for d in date_range:
+        day = calendar.monthrange(d.year, d.month)[1]
+        eomonth.append(datetime.datetime(d.year, d.month, day))
+    tmp_df.eomonth = pd.to_datetime(pd.Series(eomonth))
+    tmp_df.inv_g_aban = 0.0
+    try:
+        p_cap = float(param)
+        tmp_df.loc[tmp_df.prod_date == end_of_life, 'inv_g_aban'] = p_cap
+    except:
+        sys.stdout.flush()
+        params = param.split(' ')
+        try:
+            p_cap = float(params[0])
+        except:
+            print('capex not float')
+        if params[1] != 'after':
+            print('invalid syntax, missing \'after\'')
+            return
+        try:
+            time_delta = int(params[2])
+        except:
+            print('bad time delta', params[2])
+            return
+        unit_val = params[3]
+        if unit_val in ('d', 'day', 'days'):
+            delta = relativedelta(days=time_delta)
+        elif unit_val in ('m', 'mo', 'mos', 'month', 'months'):
+            delta = relativedelta(months=time_delta)
+        elif unit_val in ('y', 'yr', 'yrs', 'year', 'years'):
+            delta = relativedelta(years=time_delta)
+        else:
+            print('invalid timestep', unit_val)
+            return
+        aban_date = pd.Timestamp(end_of_life) + delta
+        tmp_df.loc[tmp_df.prod_date == aban_date, 'inv_g_aban'] = p_cap
     return tmp_df
 
 
@@ -2147,7 +2169,6 @@ def run_restore_query(branch, uuid_list):
         change_log['updated_by'] = os.getlogin()
         change_log['updated_on'] = pd.Timestamp(datetime.datetime.now())
         change_log['uuid'] = str(uuid.uuid1())
-        change_log.to_csv('test.csv')
 
         insert_query = ('insert into change_log ([propnum], [variable], [value], [change], ' +
                         '[table_name], [scenario], [updated_by], [updated_on], [uuid])')
