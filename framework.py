@@ -238,7 +238,7 @@ class Framework():
             if any(self.price_deck.input_gas_price > 5):
                 print('gas price failed verification reloading')
             else:
-                print('price deck verification succeed')
+                print('price deck verification succeeded')
                 gas_check = False
 
     def run_mc(self):
@@ -672,15 +672,21 @@ class Framework():
                 df['ngl_price_adj'][idx:idx+num_days] = inputs['price_adj_ngl'].price_adj_ngl.values
                 df['ngl_adj_unit'][idx:idx+num_days] = inputs['price_adj_ngl'].unit.values
 
-                df['gross_misc_capex'][idx:idx+num_days] = inputs['inv_g_misc'].inv_g_misc.values
+                df['fixed_cost'][idx:idx+num_days] = (inputs['cost_fixed'].cost_fixed.values /
+                                                      inputs['cost_fixed'].eomonth.dt.day.values) * df['wi'][idx:idx+num_days]
+                df['alloc_fixed_cost'][idx:idx+num_days] = (inputs['cost_fixed_alloc'].cost_fixed_alloc.values /
+                                                      inputs['cost_fixed_alloc'].eomonth.dt.day.values) * df['wi'][idx:idx+num_days]                                                    
+                df['var_gas_cost'][idx:idx+num_days] = (inputs['cost_vargas'].cost_vargas.values * df['shrink'][idx:idx+num_days] *
+                                                        df['gross_gas'][idx:idx+num_days]) * df['wi'][idx:idx+num_days]
+                df['var_oil_cost'][idx:idx+num_days] = (inputs['cost_varoil'].cost_varoil.values *
+                                                        df['gross_oil'][idx:idx+num_days]) * df['wi'][idx:idx+num_days]
+                df['var_water_cost'][idx:idx+num_days] = (inputs['cost_varwater'].cost_varwater.values *
+                                                          df['gross_water'][idx:idx+num_days]) * df['wi'][idx:idx+num_days]
+                df['gtp'][idx:idx+num_days] = inputs['cost_gtp'].cost_gtp.values * df['net_gas'][idx:idx+num_days] * df['wi'][idx:idx+num_days]
+                df['tax_rate'][idx:idx+num_days] = (inputs['tax_sev'].tax_sev.values +
+                                                    inputs['tax_adval'].tax_adval.values)
 
-                # idp_mask = (df['idp'] == p)
-                # gas_pct_adj = (df['gas_adj_unit'] == 'pct')
-                # gas_per_adj = (df['gas_adj_unit'] == 'per')
-                # gas_pct_mask = np.logical_and(idp_mask, gas_pct_adj)
-                # gas_per_adj = np.logical_and(idp_mask, gas_per_adj)
-                # print(df['realized_gas_price'][gas_pct_mask])
-                # sys.stdout.flush()
+                df['gross_misc_capex'][idx:idx+num_days] = inputs['inv_g_misc'].inv_g_misc.values
 
                 if budget_type == 'wedge':
 
@@ -713,20 +719,151 @@ class Framework():
                                             (df['prod_date'] >= np.datetime64(compl_start_date)) &
                                             (df['prod_date'] <= np.datetime64(compl_end_date))] = alloc_compl_capex
 
-                df['fixed_cost'][idx:idx+num_days] = (inputs['cost_fixed'].cost_fixed.values /
-                                                      inputs['cost_fixed'].eomonth.dt.day.values) * df['wi'][idx:idx+num_days]
-                df['alloc_fixed_cost'][idx:idx+num_days] = (inputs['cost_fixed_alloc'].cost_fixed_alloc.values /
-                                                      inputs['cost_fixed_alloc'].eomonth.dt.day.values) * df['wi'][idx:idx+num_days]                                                    
-                df['var_gas_cost'][idx:idx+num_days] = (inputs['cost_vargas'].cost_vargas.values * df['shrink'][idx:idx+num_days] *
-                                                        df['gross_gas'][idx:idx+num_days]) * df['wi'][idx:idx+num_days]
-                df['var_oil_cost'][idx:idx+num_days] = (inputs['cost_varoil'].cost_varoil.values *
-                                                        df['gross_oil'][idx:idx+num_days]) * df['wi'][idx:idx+num_days]
-                df['var_water_cost'][idx:idx+num_days] = (inputs['cost_varwater'].cost_varwater.values *
-                                                          df['gross_water'][idx:idx+num_days]) * df['wi'][idx:idx+num_days]
+                idp_mask = (df['idp'] == p)
 
-                df['gtp'][idx:idx+num_days] = inputs['cost_gtp'].cost_gtp.values * df['net_gas'][idx:idx+num_days] * df['wi'][idx:idx+num_days]
-                df['tax_rate'][idx:idx+num_days] = (inputs['tax_sev'].tax_sev.values +
-                                                    inputs['tax_adval'].tax_adval.values)
+                gas_pct_adj = (df['gas_adj_unit'] == 'pct')
+                gas_pct_mask = np.logical_and(idp_mask, gas_pct_adj)
+                df['realized_gas_price'][gas_pct_mask] = (df['input_gas_price'][gas_pct_mask] *
+                                                          df['gas_price_adj'][gas_pct_mask])
+
+                gas_per_adj = (df['gas_adj_unit'] == 'per')
+                gas_per_mask = np.logical_and(idp_mask, gas_per_adj)
+                df['realized_gas_price'][gas_per_mask] = (df['input_gas_price'][gas_per_mask] +
+                                                          df['gas_price_adj'][gas_per_mask])
+
+                df['realized_gas_price'][idx:idx+num_days] = (df['realized_gas_price'][idx:idx+num_days] *
+                                                              df['btu'][idx:idx+num_days])
+
+                oil_pct_adj = (df['oil_adj_unit'] == 'pct')
+                oil_pct_mask = np.logical_and(idp_mask, oil_pct_adj)
+                df['realized_oil_price'][oil_pct_mask] = (df['input_oil_price'][oil_pct_mask] *
+                                                          df['oil_price_adj'][oil_pct_mask])
+
+                oil_per_adj = (df['oil_adj_unit'] == 'per')
+                oil_per_mask = np.logical_and(idp_mask, oil_per_adj)
+                df['realized_oil_price'][oil_per_mask] = (df['input_oil_price'][oil_per_mask] +
+                                                          df['oil_price_adj'][oil_per_mask])
+
+                ngl_pct_adj = (df['ngl_adj_unit'] == 'pct')
+                ngl_pct_mask = np.logical_and(idp_mask, ngl_pct_adj)
+                df['realized_ngl_price'][ngl_pct_mask] = (df['input_ngl_price'][ngl_pct_mask] *
+                                                          df['ngl_price_adj'][ngl_pct_mask])
+
+                ngl_per_adj = (df['ngl_adj_unit'] == 'per')
+                ngl_per_mask = np.logical_and(idp_mask, ngl_per_adj)
+                df['realized_ngl_price'][ngl_per_mask] = (df['input_ngl_price'][ngl_per_mask] +
+                                                          df['ngl_price_adj'][ngl_per_mask])
+
+                df['net_gas_rev'][idx:idx+num_days] = ((df['net_gas'][idx:idx+num_days] + 
+                                                        df['royalty_gas'][idx:idx+num_days]) * 
+                                                        df['realized_gas_price'][idx:idx+num_days])
+
+                df['net_oil_rev'][idx:idx+num_days] = ((df['net_oil'][idx:idx+num_days] + 
+                                                        df['royalty_oil'][idx:idx+num_days]) * 
+                                                        df['realized_oil_price'][idx:idx+num_days])
+
+                df['net_ngl_rev'][idx:idx+num_days] = ((df['net_ngl'][idx:idx+num_days] + 
+                                                        df['royalty_ngl'][idx:idx+num_days]) *
+                                                        df['realized_ngl_price'][idx:idx+num_days])
+
+                df['net_total_rev'][idx:idx+num_days] = (df['net_gas_rev'][idx:idx+num_days] + 
+                                                         df['net_oil_rev'][idx:idx+num_days] + 
+                                                         df['net_ngl_rev'][idx:idx+num_days])
+
+                df['taxes'][idx:idx+num_days] = (df['tax_rate'][idx:idx+num_days] * 
+                                                 df['net_total_rev'][idx:idx+num_days])
+
+                df['doe'][idx:idx+num_days] = (df['fixed_cost'][idx:idx+num_days] +
+                                               df['alloc_fixed_cost'][idx:idx+num_days] +
+                                               df['var_gas_cost'][idx:idx+num_days] +
+                                               df['var_oil_cost'][idx:idx+num_days] +
+                                               df['var_water_cost'][idx:idx+num_days])
+
+                df['loe'][idx:idx+num_days] = (df['doe'][idx:idx+num_days] +
+                                               df['gtp'][idx:idx+num_days] +
+                                               df['taxes'][idx:idx+num_days])
+
+                df['gross_total_capex'][idx:idx+num_days] = (df['gross_drill_capex'][idx:idx+num_days] +
+                                                             df['gross_compl_capex'][idx:idx+num_days] +
+                                                             df['gross_misc_capex'][idx:idx+num_days])
+                df['net_drill_capex'][idx:idx+num_days] = (df['gross_drill_capex'][idx:idx+num_days] *
+                                                           df['wi'][idx:idx+num_days])
+                df['net_compl_capex'][idx:idx+num_days] = (df['gross_compl_capex'][idx:idx+num_days] *
+                                                           df['wi'][idx:idx+num_days])
+                df['net_misc_capex'][idx:idx+num_days] = (df['gross_misc_capex'][idx:idx+num_days] *
+                                                          df['wi'][idx:idx+num_days])
+                df['net_total_capex'][idx:idx+num_days] = (df['net_drill_capex'][idx:idx+num_days] +
+                                                           df['net_compl_capex'][idx:idx+num_days] +
+                                                           df['net_misc_capex'][idx:idx+num_days])
+                
+                df['cf'][idx:idx+num_days] = (df['net_total_rev'][idx:idx+num_days] - df['loe'][idx:idx+num_days])
+                df['fcf'][idx:idx+num_days] = (df['cf'][idx:idx+num_days] - df['net_total_capex'][idx:idx+num_days])
+
+                date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date))
+                capex_mask = (df['net_total_capex'][idx:idx+num_days] < 0.01)
+                neg_fcf_mask = (df['fcf'][idx:idx+num_days] < -1)
+                combined_mask = np.logical_and(date_mask, capex_mask)
+                combined_mask = np.logical_and(combined_mask, neg_fcf_mask)
+
+                if sum(combined_mask) > 1:
+                    first_neg = np.argmax(combined_mask == True)
+                    first_neg_date = df['prod_date'][idx:idx+num_days][first_neg]
+                    min_life_date = self.effective_date + relativedelta(days=self.min_life)
+                    if first_neg_date < min_life_date:
+                        end_of_life = min_life_date
+                    else:
+                        end_of_life = first_neg_date
+                    date_mask = (pd.to_datetime(pd.Series(df['prod_date'][idx:idx+num_days])) >= end_of_life)
+
+                    for k in df.keys():
+                        if k in ('scenario', 'idp', 'prod_date', 'budget_type', 'input_gas_price', 'input_oil_price',
+                                'name', 'short_pad', 'pad', 'rig', 'area', 'time_on', 'input_ngl_price',
+                                'gas_price_adj', 'oil_price_adj', 'ngl_price_adj', 'created_on', 'created_by'):
+                            continue
+                        else:
+                            df[k][idx:idx+num_days] = df[k][idx:idx+num_days] * (~date_mask).astype(int)
+
+                    aban_val = self.economics[p].__dict__['inv_g_aban']
+                    if aban_val is not None:
+                        aban = aban_capex_parser(aban_val, end_of_life, self.effective_date, self.end_date)
+                        if len(df['gross_aban_capex'][idx:idx+num_days]) == 0:
+                            print(p, 'no output data to apply abandonment')
+                            sys.stdout.flush()
+                        else:
+                            df['gross_aban_capex'][idx:idx+num_days] = aban.inv_g_aban.values
+                            df['gross_total_capex'][idx:idx+num_days] = (df['gross_total_capex'][idx:idx+num_days] + 
+                                                                         df['gross_aban_capex'][idx:idx+num_days])
+                            df['net_aban_capex'][idx:idx+num_days] = (df['gross_aban_capex'][idx:idx+num_days] *
+                                                                      inputs['wi_frac'].wi_frac.values)
+                            df['net_total_capex'][idx:idx+num_days] = (df['net_total_capex'][idx:idx+num_days] + 
+                                                                       df['net_aban_capex'][idx:idx+num_days])
+                            df['fcf'][idx:idx+num_days] = (df['fcf'][idx:idx+num_days] - 
+                                                           df['net_aban_capex'][idx:idx+num_days])
+                else:
+                    date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date))
+                    gas_mask = (df['gross_gas'][idx:idx+num_days] == 0)
+                    oil_mask = (df['gross_oil'][idx:idx+num_days] == 0)
+                    combined_mask = np.logical_and(date_mask, gas_mask)
+                    combined_mask = np.logical_and(combined_mask, oil_mask)
+                    sys.stdout.flush()
+                    for k in df.keys():
+                        if k in ('scenario', 'idp', 'prod_date', 'budget_type', 'input_gas_price', 'input_oil_price',
+                                'name', 'short_pad', 'pad', 'rig', 'area', 'time_on', 'input_ngl_price',
+                                'gas_price_adj', 'oil_price_adj', 'ngl_price_adj', 'created_on', 'created_by'):
+                            continue
+                        else:
+                            df[k][idx:idx+num_days] = df[k][idx:idx+num_days] * (~combined_mask).astype(int)
+
+                if self.start_discount == 'eff':
+                    for i in range(10):
+                        if i in range(len(self.pv_spread)):
+                            pv = self.pv_spread[i]
+                            j = i + 1
+                            df['pv'+str(j)][idx:idx+num_days] = npv(df['fcf'][idx:idx+num_days], float(pv)/100)
+                            df['pv'+str(j)+'_rate'][idx:idx+num_days] = float(pv)
+                        else:
+                            df['pv'+str(j)][idx:idx+num_days] = float(pv)
+                            df['pv'+str(j)+'_rate'][idx:idx+num_days] = ''
 
             if self.mc_pop:
                 risk_uncertainty[p]['tc_mult'] = tc_mult
@@ -758,123 +895,12 @@ class Framework():
                 print('1 BAD!!!!!!!!!!!!!!!!!', p)
                 sys.stdout.flush()
 
-        if not self.production_only:
-
-            df['realized_gas_price'][df['gas_adj_unit'] == 'pct'] = (df['input_gas_price'][df['gas_adj_unit'] == 'pct'] *
-                                                                     df['gas_price_adj'][df['gas_adj_unit'] == 'pct'])
-
-            df['realized_gas_price'][df['gas_adj_unit'] == 'per'] = (df['input_gas_price'][df['gas_adj_unit'] == 'per'] +
-                                                                     df['gas_price_adj'][df['gas_adj_unit'] == 'per'])
-
-            df['realized_gas_price'] = df['realized_gas_price'] * df['btu']
-
-            df['realized_oil_price'][df['oil_adj_unit'] == 'pct'] = (df['input_oil_price'][df['oil_adj_unit'] == 'pct'] *
-                                                                     df['oil_price_adj'][df['oil_adj_unit'] == 'pct'])
-            df['realized_oil_price'][df['oil_adj_unit'] == 'per'] = (df['input_oil_price'][df['oil_adj_unit'] == 'per'] +
-                                                                     df['oil_price_adj'][df['oil_adj_unit'] == 'per'])
-
-            df['realized_ngl_price'][df['ngl_adj_unit'] == 'pct'] = (df['input_ngl_price'][df['ngl_adj_unit'] == 'pct'] *
-                                                                     df['ngl_price_adj'][df['ngl_adj_unit'] == 'pct'])
-            df['realized_ngl_price'][df['ngl_adj_unit'] == 'per'] = (df['input_ngl_price'][df['ngl_adj_unit'] == 'per'] +
-                                                                     df['ngl_price_adj'][df['ngl_adj_unit'] == 'per'])      
-
-            df['net_gas_rev'] = (df['net_gas'] + df['royalty_gas']) * df['realized_gas_price']
-            df['net_oil_rev'] = (df['net_oil'] + df['royalty_oil']) * df['realized_oil_price']
-            df['net_ngl_rev'] = (df['net_ngl'] + df['royalty_ngl']) * df['realized_ngl_price']
-
-            df['net_total_rev'] = df['net_gas_rev'] + df['net_oil_rev'] + df['net_ngl_rev']
-
-            df['taxes'] = df['tax_rate'] * df['net_total_rev']
-
-            df['doe'] = (df['fixed_cost'] + df['alloc_fixed_cost'] + df['var_gas_cost'] + df['var_oil_cost'] + df['var_water_cost'])
-            df['loe'] = df['doe'] + df['gtp'] + df['taxes']
-
-            df['gross_total_capex'] = df['gross_drill_capex'] + df['gross_compl_capex'] + df['gross_misc_capex']
-            df['net_drill_capex'] = df['gross_drill_capex'] * df['wi']
-            df['net_compl_capex'] = df['gross_compl_capex'] * df['wi']
-            df['net_misc_capex'] = df['gross_misc_capex'] * df['wi']
-            df['net_total_capex'] = df['net_drill_capex'] + df['net_compl_capex'] + df['net_misc_capex']
-            
-            df['cf'] = df['net_total_rev'] - df['loe']
-            df['fcf'] = df['cf'] - df['net_total_capex']
-
             t = df['input_gas_price']
             if any(t > 5):
                 print('2 BAD!!!!!!!!!!!!!!!!!')
                 sys.stdout.flush()
 
-            if not self.mc_pop:
-                #print('discounting')
-                sys.stdout.flush()
-                for n, p in enumerate(property_list):
-                    #print('discounting', p, n, 'of', len(property_list))
-                    sys.stdout.flush()
-                    fcf_mask = ((df['idp'] == p) &
-                                (df['prod_date'] >= np.datetime64(prod_start_date)) &
-                                (df['net_total_capex'] < 0.01))
-                    neg_fcf_mask = df['fcf'] < -100
-                    combined_mask = np.logical_and(fcf_mask, neg_fcf_mask)
-                    if sum(combined_mask) > 1 or sum(df['fcf'][fcf_mask]) < 100:
-                        first_neg = np.argmax(combined_mask == True)
-                        first_neg_date = df['prod_date'][first_neg]
-                        min_life_date = self.effective_date + relativedelta(days=self.min_life)
-                        if first_neg_date < min_life_date:
-                            end_of_life = min_life_date
-                        else:
-                            end_of_life = first_neg_date
-                        # if p == 'M9TEG9FCFT':
-                        #     np.savetxt('tes.csv', df['gross_gas'][df['idp'] == p])
-                        #     print(p, end_of_life, min_date)
-                        #     sys.stdout.flush()
-                        idp_mask = (df['idp'] == p)
-                        date_mask = (pd.to_datetime(pd.Series(df['prod_date'])) >= end_of_life)
-                        combined_mask = np.logical_and(idp_mask, date_mask)
-                        for k in df.keys():
-                            if k in ('scenario', 'idp', 'prod_date', 'budget_type',
-                                    'name', 'short_pad', 'pad', 'rig', 'area', 'time_on',
-                                    'gas_price_adj', 'oil_price_adj', 'ngl_price_adj', 'created_on', 'created_by'):
-                                continue
-                            else:
-                                df[k][combined_mask] = 0.0
-
-                        wi_frac = self.economics[p].__dict__['wi_frac']
-                        aban_val = self.economics[p].__dict__['inv_g_aban']
-                        if aban_val is not None:
-                            aban = aban_capex_parser(aban_val, end_of_life, self.effective_date, self.end_date)
-                            wi = econ_parser('wi_frac', wi_frac, self.effective_date, self.effective_date, self.end_date)
-                            if len(df['gross_aban_capex'][df['idp'] == p]) == 0:
-                                print(p, 'no output data to apply abandonment')
-                                sys.stdout.flush()
-                            else:
-                                df['gross_aban_capex'][df['idp'] == p] = aban.inv_g_aban.values
-                                df['gross_total_capex'][df['idp'] == p] = (df['gross_total_capex'][df['idp'] == p] + 
-                                                                        df['gross_aban_capex'][df['idp'] == p])
-                                df['net_aban_capex'][df['idp'] == p] = aban.inv_g_aban.values * wi.wi_frac.values
-                                df['net_total_capex'][df['idp'] == p] = (df['net_total_capex'][df['idp'] == p] + 
-                                                                        df['net_aban_capex'][df['idp'] == p])
-                                df['cf'][df['idp'] == p] = (df['cf'][df['idp'] == p] - 
-                                                            df['net_aban_capex'][df['idp'] == p])
-                                df['fcf'][df['idp'] == p] = (df['fcf'][df['idp'] == p] - 
-                                                            df['net_aban_capex'][df['idp'] == p])
-
-                    if self.start_discount == 'eff':
-                        for i in range(10):
-                            if i in range(len(self.pv_spread)):
-                                pv = self.pv_spread[i]
-                                j = i + 1
-                                df['pv'+str(j)][df['idp'] == p] = npv(df['fcf'][df['idp'] == p], float(pv)/100)
-                                df['pv'+str(j)+'_rate'][df['idp'] == p] = float(pv)
-                            else:
-                                df['pv'+str(j)][df['idp'] == p] = float(pv)
-                                df['pv'+str(j)+'_rate'][df['idp'] == p] = ''
-                    if self.start_discount == 'drill':
-                        print('tbd, do not use, pv will not calc')
-                        sys.stdout.flush()
-                        # disc_val = npv(df['fcf'][(df['idp'] == p) & (df['prod_date'] >= np.datetime64(drill_start_date))], 0.1)
-                        # disc_val = np.concatenate([np.zeros(num_days - len(disc_val)), disc_val])
-                        # df['npv'][df['idp'] == p] = disc_val
-                        # df['cum_fcf'][df['idp'] == p] = df['fcf'][df['idp'] == p].cumsum()
-            else:
+            if self.mc_pop:
                 #print('calculating metrics')
                 sys.stdout.flush()
                 econ_dists = {'idp': np.empty(num_properties, dtype='object'),
