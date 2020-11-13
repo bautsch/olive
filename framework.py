@@ -12,6 +12,10 @@ import calendar
 import pickle
 np.seterr(over='ignore')
 pd.options.display.float_format = '{:,.2f}'.format
+# import line_profiler
+# import atexit
+# profile = line_profiler.LineProfiler()
+# atexit.register(profile.print_stats)
 
 
 class Framework():
@@ -346,7 +350,7 @@ class Framework():
         start = time.time()
         if len(property_list) > 200:
             temp_c = []
-            chunks = [property_list[i:i + 400] for i in range(0, len(property_list), 400)]
+            chunks = [property_list[i:i + 200] for i in range(0, len(property_list), 200)]
             for i, c in enumerate(chunks):
                 print('loop', i+1, 'of', len(chunks), len(c))
                 temp_c.append(self.populate(c))
@@ -394,7 +398,7 @@ class Framework():
                  'taxes', 'loe', 'cf', 'fcf', 'cum_fcf', 'pv1', 'pv1_rate',
                  'pv2', 'pv2_rate', 'pv3', 'pv3_rate', 'pv4', 'pv4_rate',
                  'pv5', 'pv5_rate', 'pv6', 'pv6_rate', 'pv7', 'pv7_rate',
-                 'pv8', 'pv8_rate', 'pv9', 'pv9_rate', 'pv10', 'pv10_rate',
+                 'pv8', 'pv8_rate', 'pv9', 'pv9_rate', 'pv10', 'pv10_rate', 'active',
                  'created_by', 'created_on']
 
         df = {}
@@ -615,7 +619,7 @@ class Framework():
                 for i, val in e.__dict__.items():
                     if i == 'inv_g_misc':
                         inputs[i] = misc_capex_parser(val, self.effective_date, self.end_date)
-                    elif i in ('inv_g_drill', 'inv_g_compl', 'inv_g_aban'):
+                    elif i in ('inv_g_drill', 'inv_g_compl', 'inv_g_aban', 'minimum_life'):
                         continue
                     elif i in ('wi_frac', 'nri_frac', 'roy_frac', 'gross_gas_mult', 'gross_oil_mult', 'gross_water_mult'):
                         inputs[i] = econ_parser(i, val, self.effective_date,
@@ -795,7 +799,7 @@ class Framework():
                 df['net_total_capex'][idx:idx+num_days] = (df['net_drill_capex'][idx:idx+num_days] +
                                                            df['net_compl_capex'][idx:idx+num_days] +
                                                            df['net_misc_capex'][idx:idx+num_days])
-                
+
                 df['cf'][idx:idx+num_days] = (df['net_total_rev'][idx:idx+num_days] - df['loe'][idx:idx+num_days])
                 df['fcf'][idx:idx+num_days] = (df['cf'][idx:idx+num_days] - df['net_total_capex'][idx:idx+num_days])
 
@@ -804,24 +808,26 @@ class Framework():
                 neg_fcf_mask = (df['fcf'][idx:idx+num_days] < -1)
                 combined_mask = np.logical_and(date_mask, capex_mask)
                 combined_mask = np.logical_and(combined_mask, neg_fcf_mask)
+                min_life_val = self.economics[p].__dict__['minimum_life']
 
                 if sum(combined_mask) > 1:
                     first_neg = np.argmax(combined_mask == True)
                     first_neg_date = df['prod_date'][idx:idx+num_days][first_neg]
-                    min_life_date = self.effective_date + relativedelta(days=self.min_life)
-                    if first_neg_date < min_life_date:
-                        end_of_life = min_life_date
+                    min_life = min_life_parser(min_life_val, first_neg_date, self.effective_date, self.end_date)
+                    if all(min_life.min_life.values != 0):
+                        end_of_life = self.effective_date
                     else:
-                        end_of_life = first_neg_date
-                    date_mask = (pd.to_datetime(pd.Series(df['prod_date'][idx:idx+num_days])) >= end_of_life)
+                        end_of_life = min_life.loc[(min_life.min_life.values == 0), 'prod_date'].values[0]
 
                     for k in df.keys():
                         if k in ('scenario', 'idp', 'prod_date', 'budget_type', 'input_gas_price', 'input_oil_price',
-                                'name', 'short_pad', 'pad', 'rig', 'area', 'time_on', 'input_ngl_price',
+                                'name', 'short_pad', 'pad', 'rig', 'area', 'time_on', 'input_ngl_price', 'wi', 'nri',
                                 'gas_price_adj', 'oil_price_adj', 'ngl_price_adj', 'created_on', 'created_by'):
                             continue
+                        elif k == 'active':
+                            df[k][idx:idx+num_days] = min_life.min_life.values
                         else:
-                            df[k][idx:idx+num_days] = df[k][idx:idx+num_days] * (~date_mask).astype(int)
+                            df[k][idx:idx+num_days] = df[k][idx:idx+num_days] * min_life.min_life.values
 
                     aban_val = self.economics[p].__dict__['inv_g_aban']
                     if aban_val is not None:
@@ -829,7 +835,12 @@ class Framework():
                         if len(df['gross_aban_capex'][idx:idx+num_days]) == 0:
                             print(p, 'no output data to apply abandonment')
                             sys.stdout.flush()
-                        else:
+                        elif sum(aban.inv_g_aban.values) > 0:
+                            aban_date = aban.loc[(aban.inv_g_aban.values != 0), 'prod_date'].values[0]
+                            aban['active'] = 1
+                            aban.loc[aban.prod_date > aban_date, 'active'] = 0
+                            wi = df['wi'][idx:idx+num_days] * aban.active.values
+                            nri = df['nri'][idx:idx+num_days] * aban.active.values
                             df['gross_aban_capex'][idx:idx+num_days] = aban.inv_g_aban.values
                             df['gross_total_capex'][idx:idx+num_days] = (df['gross_total_capex'][idx:idx+num_days] + 
                                                                          df['gross_aban_capex'][idx:idx+num_days])
@@ -839,21 +850,27 @@ class Framework():
                                                                        df['net_aban_capex'][idx:idx+num_days])
                             df['fcf'][idx:idx+num_days] = (df['fcf'][idx:idx+num_days] - 
                                                            df['net_aban_capex'][idx:idx+num_days])
+                            df['active'][idx:idx+num_days] = aban['active'].values
+                            df['wi'][idx:idx+num_days] = wi
+                            df['nri'][idx:idx+num_days] = nri
                 else:
-                    date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date))
-                    gas_mask = (df['gross_gas'][idx:idx+num_days] == 0)
-                    oil_mask = (df['gross_oil'][idx:idx+num_days] == 0)
-                    combined_mask = np.logical_and(date_mask, gas_mask)
-                    combined_mask = np.logical_and(combined_mask, oil_mask)
-                    sys.stdout.flush()
-                    for k in df.keys():
-                        if k in ('scenario', 'idp', 'prod_date', 'budget_type', 'input_gas_price', 'input_oil_price',
-                                'name', 'short_pad', 'pad', 'rig', 'area', 'time_on', 'input_ngl_price',
-                                'gas_price_adj', 'oil_price_adj', 'ngl_price_adj', 'created_on', 'created_by'):
-                            continue
-                        else:
-                            df[k][idx:idx+num_days] = df[k][idx:idx+num_days] * (~combined_mask).astype(int)
-
+                    if min_life_val not in ('loss ok', 'lossok', 'loss_ok'):
+                        date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date))
+                        gas_mask = (df['gross_gas'][idx:idx+num_days] == 0)
+                        oil_mask = (df['gross_oil'][idx:idx+num_days] == 0)
+                        combined_mask = np.logical_and(date_mask, gas_mask)
+                        combined_mask = np.logical_and(combined_mask, oil_mask)
+                        for k in df.keys():
+                            if k in ('scenario', 'idp', 'prod_date', 'budget_type', 'input_gas_price', 'input_oil_price',
+                                    'name', 'short_pad', 'pad', 'rig', 'area', 'time_on', 'input_ngl_price',
+                                    'gas_price_adj', 'oil_price_adj', 'ngl_price_adj', 'created_on', 'created_by'):
+                                continue
+                            elif k == 'active':
+                                df[k][idx:idx+num_days] = (~combined_mask).astype(int)
+                            else:
+                                df[k][idx:idx+num_days] = df[k][idx:idx+num_days] * (~combined_mask).astype(int)
+                    else:
+                        df['active'][idx:idx+num_days] = np.array([1] * len(df['active'][idx:idx+num_days]))
                 if self.start_discount == 'eff':
                     for i in range(10):
                         if i in range(len(self.pv_spread)):
@@ -1204,6 +1221,7 @@ class Well_Econ():
         self.price_adj_gas = None
         self.price_adj_oil = None
         self.price_adj_ngl = None
+        self.minimum_life = None
         self.parse_inputs(econ_dict)
     
     def parse_inputs(self, econ_dict):

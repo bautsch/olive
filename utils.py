@@ -1025,31 +1025,38 @@ def misc_capex_parser(param, effective_date, end_date):
     tmp_df.inv_g_misc = 0.0
     params = param.split(',')
     for p in params:
+        if p[0] == ' ':
+            p = p[1:]
         p_split = p.split(' ')
         if len(p_split) == 1:
             try:
                 p_split = float(p_split[0])
                 if p_split > 0.001:
-                    print('misc capex with no date provided')
+                    print('misc capex with no date provided', p_split)
+                    sys.stdout.flush()
                     return tmp_df
                 else:
                     return tmp_df
             except:
-                print('bad misc capex')
+                print('bad misc capex', p_split)
+                sys.stdout.flush()
                 return tmp_df
         if len(p_split) > 1:
             try:
                 p_cap = float(p_split[0])
             except:
                 print('capex not float')
+                sys.stdout.flush()
                 return tmp_df
             if p_split[1] != 'on':
                 print('invalid syntax, missing \'on\'')
+                sys.stdout.flush()
                 return tmp_df
             try:
                 p_date = pd.Timestamp(p_split[2])
             except:
                 print('invalid date')
+                sys.stdout.flush()
                 return tmp_df
             tmp_df.loc[tmp_df.prod_date == p_date, 'inv_g_misc'] = p_cap
     return tmp_df
@@ -1074,13 +1081,16 @@ def aban_capex_parser(param, end_of_life, effective_date, end_date):
             p_cap = float(params[0])
         except:
             print('capex not float')
+            sys.stdout.flush()
         if params[1] != 'after':
             print('invalid syntax, missing \'after\'')
+            sys.stdout.flush()
             return
         try:
             time_delta = int(params[2])
         except:
             print('bad time delta', params[2])
+            sys.stdout.flush()
             return
         unit_val = params[3]
         if unit_val in ('d', 'day', 'days'):
@@ -1091,11 +1101,72 @@ def aban_capex_parser(param, end_of_life, effective_date, end_date):
             delta = relativedelta(years=time_delta)
         else:
             print('invalid timestep', unit_val)
+            sys.stdout.flush()
             return
         aban_date = pd.Timestamp(end_of_life) + delta
         tmp_df.loc[tmp_df.prod_date == aban_date, 'inv_g_aban'] = p_cap
     return tmp_df
 
+def min_life_parser(param, first_neg_date, effective_date, end_date):
+    tmp_df = pd.DataFrame(columns=['prod_date', 'eomonth', 'min_life'])
+    date_range = pd.date_range(effective_date, end_date, freq='D')
+    tmp_df.prod_date = date_range
+    eomonth = []
+    for d in date_range:
+        day = calendar.monthrange(d.year, d.month)[1]
+        eomonth.append(datetime.datetime(d.year, d.month, day))
+    tmp_df.eomonth = pd.to_datetime(pd.Series(eomonth))
+    tmp_df.min_life = 1
+    if param in ('loss ok', 'lossok', 'loss_ok'):
+        return tmp_df
+    try:
+        params = param.split(' ')
+    except:
+        print('invalid syntax, can\'t split', param)
+        sys.stdout.flush()
+        return
+    try:
+        time_delta = int(params[0])
+    except:
+        print('time value not int', params[0])
+        sys.stdout.flush()
+        return
+    unit_val = params[1]
+    if unit_val in ('d', 'day', 'days'):
+        delta = relativedelta(days=time_delta)
+    elif unit_val in ('m', 'mo', 'mos', 'month', 'months'):
+        delta = relativedelta(months=time_delta)
+    elif unit_val in ('y', 'yr', 'yrs', 'year', 'years'):
+        delta = relativedelta(years=time_delta)
+    else:
+        print('invalid timestep', unit_val)
+        sys.stdout.flush()
+        return
+    if len(params) > 2:
+        if params[2] != 'after':
+            print('invalid syntax, missing \'after\'')
+            return                
+        if len(params) == 5:
+            p = params[3] + ' ' + params[4]
+        else:
+            p = params[3]
+        if p in ('effective date', 'eff', 'eff date',
+                    'effective_date', 'eff', 'eff_date'):
+            min_date = effective_date + delta
+            if first_neg_date < min_date:
+                end_of_life = min_date
+            else:
+                end_of_life = first_neg_date
+        if p == 'life':
+            end_of_life = first_neg_date + delta
+    else:
+        min_date = effective_date + delta
+        if first_neg_date < min_date:
+            end_of_life = min_date
+        else:
+            end_of_life = first_neg_date
+    tmp_df.loc[tmp_df.prod_date > end_of_life, 'min_life'] = 0
+    return tmp_df
 
 def load_output_from_sql(branch, scenario_name):
     conn = connect(branch.tree.connection_dict)
@@ -1604,7 +1675,7 @@ def arps_fit(params, dmin, min_rate):
     af = (1/params[0])*(np.power((1-df), -params[0])-1)/365
     t = int((ai-af)/(params[0]*ai*af))
     m = np.arange(1, t+1)
-    m_exp = np.arange(1, 18250-t)
+    m_exp = np.arange(1, 45625-t)
     q = params[2]/np.power((1+params[0]*ai*m), 1/params[0])
     qf = np.insert(q, 0, params[2])
     n = (np.power(params[2], params[0])*(np.power(params[2],
@@ -1615,28 +1686,34 @@ def arps_fit(params, dmin, min_rate):
     n_exp = (q0_exp-qf_exp)/af
     forecast_exp = np.diff(n_exp, axis=0)
     forecast = np.concatenate([forecast_arps, forecast_exp])
+    if any(forecast < min_rate):
+        end_of_life = np.argmax(forecast < min_rate)
+    else:
+        end_of_life = len(forecast)
+    forecast = forecast[:end_of_life]
     if len(forecast) < 18250:
         np.concatenate([forecast, np.zeros(18250-len(forecast))])
-    forecast[forecast < min_rate] = 0.0
-    return forecast[:18250]
+
+    return forecast
 
 def residuals(params, y, dmin, min_rate, method='beta'):
-    if len(y) > 18240:
-        y = y[:18240]
+    fcst = arps_fit(params, dmin, min_rate)[:len(y)]
+    if len(fcst) < len(y):
+        fcst = np.concatenate([fcst, np.zeros(len(y) - len(fcst))])
     if method == 'beta':
         beta_x = np.linspace(0.01, 0.99, len(y))
-        cost = np.multiply(y - arps_fit(params, dmin, min_rate)[:len(y)],
-                           beta.pdf(beta_x, .98, 0.8))
+        cost = np.multiply(y - fcst, beta.pdf(beta_x, .98, 0.8))
         cost = np.divide(cost[y > 0], y[y > 0])
     if method == 'diff':
-        cost = y - arps_fit(params, dmin, min_rate)[:len(y)]
+        cost = y - fcst
     if method == 'frac':
-        cost = y / arps_fit(params, dmin, min_rate)[:len(y)]
+        cost = y / fcst
     return cost
 
 def delete_prod_info(forecaster, overwrite, forecast_type):
     start = time.time()
     prop_list = list(forecaster.branch.properties.propnum.unique())
+    num_prop = len(prop_list)
     if forecast_type:
         filtered_props = []
         for p in prop_list:
@@ -1650,14 +1727,15 @@ def delete_prod_info(forecaster, overwrite, forecast_type):
             elif p_type == forecast_type:
                 filtered_props.append(p)
         prop_list = filtered_props
+        num_prop = len(prop_list)
     if not overwrite:
         connection = connect(forecaster.branch.tree.connection_dict)
         query = str('select distinct idp from prod_forecasts '
                     'where scenario = \'' + forecaster.branch.scenario.forecast + '\'')
         idp_list = pd.read_sql(query, connection)['idp'].values
         prop_list = [idp for idp in prop_list if idp not in idp_list]
+        num_prop = len(prop_list)
     if prop_list:
-        print(len(prop_list), 'total forecast info onelines deleted')
         prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
         conn = connect(forecaster.branch.tree.connection_dict)
         eng = engine(forecaster.branch.tree.connection_dict)
@@ -1665,6 +1743,7 @@ def delete_prod_info(forecaster, overwrite, forecast_type):
         query = str('delete from prod_forecasts_info '
                     'where scenario = \'' + forecaster.branch.scenario.forecast + '\' '
                     'and idp in (' + prop_list + ')')
+        print(num_prop, 'total forecast info onelines deleted')
         cursor.execute(query)
         conn.commit()
         cursor.close()
