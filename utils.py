@@ -1197,18 +1197,22 @@ def delete_output(framework):
     conn = connect(framework.branch.tree.connection_dict)
     eng = engine(framework.branch.tree.connection_dict)
     cursor = conn.cursor()
+    if framework.rename is not None:
+        scenario = framework.rename
+    else:
+        scenario = framework.branch.scenario.scenario
     if framework.delete_all:
-        print('\ndeleting', framework.branch.scenario.scenario, 'from output table')
+        print('\ndeleting', scenario, 'from output table')
         sys.stdout.flush()
         query = str('delete from output '
-                    'where scenario = \'' + framework.branch.scenario.scenario + '\'')
+                    'where scenario = \'' + scenario + '\'')
     else:
         prop_list = framework.branch.properties.propnum.unique()
-        print('\ndeleting', len(prop_list), 'properties from output scenario', framework.branch.scenario.scenario)
+        print('\ndeleting', len(prop_list), 'properties from output scenario', scenario)
         sys.stdout.flush()
         prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
         query = str('delete from output '
-                    'where scenario = \'' + framework.branch.scenario.scenario + '\' '
+                    'where scenario = \'' + scenario + '\' '
                     'and idp in (' + prop_list + ')')
     cursor.execute(query)
     conn.commit()
@@ -1966,6 +1970,26 @@ def join_dict(list_of_dicts):
         print('not a list')
         return None
 
+def prob_dict(u_val):
+    d = {}
+    u_val = u_val.split(',')
+    for i in u_val:
+        if i[0] == ' ':
+            i = i[1:]
+        i = i.split(':')
+        try:
+            val = float(i[1])
+        except:
+            val = i[1]
+        d[i[0]] = val
+    return d
+
+def load_probability_scenario(framework):
+    connection = connect(framework.branch.tree.connection_dict)
+    query = str('select * from probabilities '
+                'where scenario = \'' + framework.branch.scenario.probability  + '\'')
+    return pd.read_sql(query, connection)
+
 def apply_uncertainty(d):
     if d['distribution'] == 'normal':
         a = (d['min'] - d['mean']) / d['stdev']
@@ -1973,6 +1997,8 @@ def apply_uncertainty(d):
         return truncnorm.rvs(a, b, loc=d['mean'], scale=d['stdev'])
     if d['distribution'] == 'uniform':
         return np.random.uniform(d['min'], d['max'])
+    if d['distribution'] == 'constant':
+        return d['value']
 
 def apply_risk(d):
     p = d['probability']

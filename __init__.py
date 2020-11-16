@@ -521,11 +521,9 @@ class Branch():
         stop = time.time()
         timer(start, stop)
 
-    def build_output(self, uncertainty=None, risk=None, delete_all=True, increment=False):
-        self.framework.uncertainty = uncertainty
-        self.framework.risk = risk
+    def build_output(self, delete_all=True, rename=None):
         self.framework.delete_all = delete_all
-        self.framework.increment = increment
+        self.framework.rename = rename
         print('\nsaving temp load file')
         save_object(self, 'temp\\load')
         time.sleep(3)
