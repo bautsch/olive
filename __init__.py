@@ -205,15 +205,19 @@ class Tree():
             except PermissionError:
                 time.sleep(3)
 
-        for i, sim in enumerate(e):
-            if i == 0:
-                continue
-            for k in sim.keys():
-                e[0][k] = np.concatenate([e[0][k], sim[k]])
-        self.branches[branch_name].framework.econ_dists = pd.DataFrame(e[0])
-        save_dists_to_excel(self.branches[branch_name], 'archive')
-        save_dists_to_excel(self.branches[branch_name], 'main')
-        save_dists_to_sql(self.branches[branch_name])
+        if not self.branches[branch_name].framework.mc_monthly:
+            for i, sim in enumerate(e):
+                if i == 0:
+                    continue
+                for k in sim.keys():
+                    e[0][k] = np.concatenate([e[0][k], sim[k]])
+            self.branches[branch_name].framework.econ_dists = pd.DataFrame(e[0])
+            save_dists_to_excel(self.branches[branch_name], 'archive')
+            save_dists_to_excel(self.branches[branch_name], 'main')
+            save_dists_to_sql(self.branches[branch_name])
+        else:
+            self.branches[branch_name].framework.econ_dists = e
+            e.to_csv('test.csv')
         stop = time.time()
         timer(start, stop)
 
@@ -383,9 +387,8 @@ class Branch():
         self.capacity.pdf_report(file_path='archive')
         self.capacity.pdf_report(file_path='main')
 
-    def monte_carlo(self, num_simulations=1, uncertainty=None, risk=None):
-        self.framework.uncertainty = uncertainty
-        self.framework.risk = risk
+    def monte_carlo(self, num_simulations=1, monthly=False):
+        self.framework.mc_monthly = monthly
         self.framework.num_simulations = num_simulations
         print('\nsaving temp load file')
         save_object(self, 'temp\\load')
