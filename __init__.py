@@ -5,6 +5,7 @@ from .framework import Framework
 from .capacity import Capacity
 from .forecaster import Forecaster
 from .plotter import *
+# from .dash_test2 import run_server
 import time
 import pandas as pd
 import numpy as np
@@ -110,6 +111,30 @@ class Tree():
     def create_folders(self):
         create_dir(self)
 
+    def dash_test(self, branch_name):
+        branch = self.branches[branch_name]
+        start = time.time()
+        build_script_path = os.path.dirname(__file__)
+        python_path = sys.executable
+        print('preparing dash test')
+        p = subprocess.Popen(python_path + ' ' + build_script_path + '\\dash_test.py',
+                             stdout=subprocess.PIPE,
+                             universal_newlines=True)
+        for line in p.stdout:
+            print(line.rstrip())
+        while not os.path.exists('temp\\reload.pkl'):
+            time.sleep(5)
+        if os.path.isfile('temp\\reload.pkl'):
+            print('\nloading temp reload file')
+            self.branches['temp'] = load_object('temp\\reload')
+        print('cleaning up')
+        while os.path.exists('temp\\reload.pkl'):
+            try:
+                if os.path.isfile('temp\\reload.pkl'):
+                    os.remove('temp\\reload.pkl')
+            except PermissionError:
+                time.sleep(3)
+
     def build_output(self, branch_name):
         branch = self.branches[branch_name]
         start = time.time()
@@ -180,15 +205,19 @@ class Tree():
             except PermissionError:
                 time.sleep(3)
 
-        for i, sim in enumerate(e):
-            if i == 0:
-                continue
-            for k in sim.keys():
-                e[0][k] = np.concatenate([e[0][k], sim[k]])
-        self.branches[branch_name].framework.econ_dists = pd.DataFrame(e[0])
-        save_dists_to_excel(self.branches[branch_name], 'archive')
-        save_dists_to_excel(self.branches[branch_name], 'main')
-        save_dists_to_sql(self.branches[branch_name])
+        if not self.branches[branch_name].framework.mc_monthly:
+            for i, sim in enumerate(e):
+                if i == 0:
+                    continue
+                for k in sim.keys():
+                    e[0][k] = np.concatenate([e[0][k], sim[k]])
+            self.branches[branch_name].framework.econ_dists = pd.DataFrame(e[0])
+            save_dists_to_excel(self.branches[branch_name], 'archive')
+            save_dists_to_excel(self.branches[branch_name], 'main')
+            save_dists_to_sql(self.branches[branch_name])
+        else:
+            self.branches[branch_name].framework.econ_dists = e
+            e.to_csv('test.csv')
         stop = time.time()
         timer(start, stop)
 
@@ -358,16 +387,15 @@ class Branch():
         self.capacity.pdf_report(file_path='archive')
         self.capacity.pdf_report(file_path='main')
 
-    def monte_carlo(self, num_simulations=1, uncertainty=None, risk=None):
-        self.framework.uncertainty = uncertainty
-        self.framework.risk = risk
+    def monte_carlo(self, num_simulations=1, monthly=False):
+        self.framework.mc_monthly = monthly
         self.framework.num_simulations = num_simulations
         print('\nsaving temp load file')
         save_object(self, 'temp\\load')
         time.sleep(3)
         self.tree.monte_carlo(self.name)
 
-    def autofit(self, overwrite=False, forecast_type=None):
+    def autofit(self, overwrite=False, forecast_type=None, min_date=None):
         if self.forecaster is None:
             self.forecaster = Forecaster(self, overwrite, forecast_type)
         print('\nstarting autoforecaster')
@@ -387,6 +415,12 @@ class Branch():
         print('saving log')
         save_log(self.forecaster)
 
+    def dash_test(self):
+        save_object(self, 'temp\\load')
+        time.sleep(0.5)
+        self.tree.dash_test(self.name)
+        # run_server(self)
+
     def multigraph(self, properties=None):
         plot(self, properties)
 
@@ -395,7 +429,7 @@ class Branch():
         save_to_excel(self, file_path='archive')
         save_to_excel(self, file_path='main')
 
-    def add_properties(self, idp=None, pad=None, short_pad=None,
+    def add_properties(self, idp=None, pad=None, short_pad=None, grouping=None,
                        area=None, scenario=None, project=None):
         if idp is not None:
             print('\nadding properties by id')
@@ -415,6 +449,12 @@ class Branch():
         elif area is not None:
             print('\nadding properties by area:\t\t' + ', '.join(a for a in area))
             properties = load_properties(self, area=area)
+        elif grouping is not None:
+            if type(grouping) == list:
+                print('\nadding properties by grouping:\t\t' + ', '.join(g for g in grouping))
+            else:
+                print('\nadding properties by grouping:\t\t' + grouping)
+            properties = load_properties(self, grouping=grouping)
         elif self.scenario.area is not None:
             print('\nadding properties by area:\t\t' + ', '.join(a for a in area))
             properties = load_properties(self, area=area)            
@@ -484,10 +524,9 @@ class Branch():
         stop = time.time()
         timer(start, stop)
 
-    def build_output(self, uncertainty=None, risk=None, delete_all=True):
-        self.framework.uncertainty = uncertainty
-        self.framework.risk = risk
+    def build_output(self, delete_all=True, rename=None):
         self.framework.delete_all = delete_all
+        self.framework.rename = rename
         print('\nsaving temp load file')
         save_object(self, 'temp\\load')
         time.sleep(3)
@@ -498,3 +537,30 @@ class Branch():
             print('saving branch pickle')
             name = self.scenario.scenario
         save_object(self, name)
+
+    def update(self, updates, filters=None):
+        do_not_proceed = True
+        while do_not_proceed is True:
+            plot_cmd = input('proceed with update? (y/n): ')
+            if plot_cmd not in ('yes', 'no', 'YES', 'NO', 'y', 'n', 'Y', 'N'):
+                print('invalid command')
+            else:
+                if plot_cmd in ('no', 'NO', 'n', 'N'):
+                    return
+                else:
+                    do_not_proceed = False
+        if filters is None:
+            do_not_proceed = True
+            while do_not_proceed is True:
+                plot_cmd = input(' NO FILTER CRITERA PROVIDED ARE YOU SURE YOU WANT TO PROCEED? (Y/N):  ')
+                if plot_cmd not in ('yes', 'no', 'YES', 'NO', 'y', 'n', 'Y', 'N'):
+                    print('invalid command')
+                else:
+                    if plot_cmd in ('no', 'NO', 'n', 'N'):
+                        return
+                    else:
+                        do_not_proceed = False
+        run_query(self, filters, updates)
+
+    def restore(self, uuid):
+        run_restore_query(self, uuid)

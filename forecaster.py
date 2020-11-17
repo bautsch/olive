@@ -168,7 +168,7 @@ class Forecaster():
                     print('preparing dataframe')
                     sys.stdout.flush()
                     if len(fits) > 1:
-                        fits = [pd.DataFrame(f) for f in fits if f is not None]
+                        fits = [pd.DataFrame(f) for f in fits if all(v is not None for v in f.values())]
                         fits = pd.concat(fits)
                     else:
                         fits = pd.DataFrame(fits[0])
@@ -204,7 +204,7 @@ class Forecaster():
                 print('preparing dataframe')
                 sys.stdout.flush()
                 if len(fits) > 1:
-                    fits = [pd.DataFrame(f) for f in fits if f is not None]
+                    fits = [pd.DataFrame(f) for f in fits if all(v is not None for v in f.values())]
                     fits = pd.concat(fits)
                 else:
                     fits = pd.DataFrame(fits[0])
@@ -438,9 +438,9 @@ class Forecaster():
         return prod_info, log
 
     def fit(self, well):
-        fcst_dict = {'scenario': [self.branch.scenario.forecast] * 18250,
-                     'idp': [well.idp] * 18250,
-                     'forecast': [well.forecast] * 18250,
+        fcst_dict = {'scenario': None,
+                     'idp': None,
+                     'forecast': None,
                      'prod_date': None,
                      'prod_cat': None,
                      'time_on': None,
@@ -454,6 +454,8 @@ class Forecaster():
                'idp': None,
                'message': None}
 
+        max_life = None
+        max_t = None
         for t in well.prod_types:
             guess = self.auto_params[t]['initial_guesses']
             bounds = self.auto_params[t]['bounds']
@@ -515,33 +517,22 @@ class Forecaster():
                 log['idp'] = well.idp
                 log['message'] = 'no production in last 14 days, setting forecast to zero'
                 sys.stdout.flush()
-            forecast = np.concatenate([well.prod_info[t]['y'], forecast[start_idx-max_idx:]])
+            forecast = np.concatenate([well.prod_info[t]['y'], forecast[start_idx:]])
 
-            if len(forecast) > 18250:
-                forecast = forecast[:18250]
-            if len(forecast) < 18250:
-                forecast = np.concatenate([forecast, np.zeros(18250-len(forecast))])
-            forecast[forecast < min_rate] = 0.0
-
+            life = len(forecast)
+            if max_life is None:
+                max_life = life
+                max_t = t
+                max_y = len(well.prod_info[t]['y'])
+            else:
+                if life > max_life:
+                    max_life = life
+                    max_t = t
+                    max_y = len(well.prod_info[t]['y'])
             eur = forecast.sum()
- 
+
             fcst_dict[t] = forecast
             fcst_dict[str('cum_' + t)] = forecast.cumsum()
-
-            if fcst_dict['time_on'] is None:
-                time_on = np.arange(1, 18251)
-                fcst_dict['time_on'] = time_on
-            
-            if fcst_dict['prod_date'] is None:
-                prod_date = pd.date_range(well.prod_info[t]['first_prod_date'],
-                                          periods=18250, freq='D').strftime('%x')
-                fcst_dict['prod_date'] = prod_date
-
-            if fcst_dict['prod_cat'] is None:
-                prod_cat = ['actual'] * len(well.prod_info[t]['y'])
-                forecast_cat = ['forecast'] * (len(forecast) - len(well.prod_info[t]['y']))
-                prod_cat.extend(forecast_cat)
-                fcst_dict['prod_cat'] = prod_cat
 
             well.prod_info[t]['b_factor'] = params[0]
             well.prod_info[t]['initial_decline'] = params[1]
@@ -557,6 +548,28 @@ class Forecaster():
             well.prod_info[t]['y'] = None
             well.prod_info[t]['x'] = None
             well.prod_info[t]['y_fcst'] = None
+
+        fcst_dict['scenario'] = [self.branch.scenario.forecast] * max_life
+        fcst_dict['idp'] = [well.idp] * max_life
+        fcst_dict['forecast'] = [well.forecast] * max_life
+
+        time_on = np.arange(1, max_life+1)
+        fcst_dict['time_on'] = time_on
+        
+        prod_date = pd.date_range(well.prod_info[t]['first_prod_date'],
+                                    periods=max_life, freq='D').strftime('%x')
+        fcst_dict['prod_date'] = prod_date
+
+        prod_cat = ['actual'] * max_y
+        forecast_cat = ['forecast'] * (max_life - max_y)
+        prod_cat.extend(forecast_cat)
+        fcst_dict['prod_cat'] = prod_cat
+
+        for t in well.prod_types:
+            if fcst_dict[t] != max_t:
+                forecast = np.concatenate([fcst_dict[t], np.zeros(max_life - len(fcst_dict[t]))])
+                fcst_dict[t] = forecast
+                fcst_dict[str('cum_' + t)] = forecast.cumsum()
 
         for t, y in well.yields_dict.items():
             if y is not None:

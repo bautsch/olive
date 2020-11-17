@@ -1,7 +1,8 @@
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
+import uuid
 import operator
+import calendar
 import time
 import os
 import sys
@@ -11,7 +12,6 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 from sqlalchemy import create_engine
-import time
 import pickle
 from dateutil.relativedelta import relativedelta
 from pandas.tseries.offsets import MonthEnd
@@ -313,7 +313,7 @@ def load_schedule_properties(schedule):
                 'and pad in (' + pad_list + ')')
     return pd.read_sql(query, conn)
 
-def load_properties(branch, idp=None, pad=None, short_pad=None, 
+def load_properties(branch, idp=None, pad=None, short_pad=None, grouping=None,
                     area=None, scenario=None, project=None, budget_type='base'):
     conn = connect(branch.tree.connection_dict)
     if idp is not None:
@@ -362,7 +362,7 @@ def load_properties(branch, idp=None, pad=None, short_pad=None,
                     'and economics.scenario = \'' + branch.scenario.economics + '\' '
                     'and forecasts.scenario = \'' + branch.scenario.forecast + '\' '
                     'and properties.active = 1 '
-                    'and forecasts.budget_type = \'' + budget_type + '\' '
+                    'and properties.budget_type = \'' + budget_type + '\' '
                     'and properties.prospect in (' + area_list + ')')
     if scenario is not None:
         query = str('select properties.* from properties ' +
@@ -371,7 +371,20 @@ def load_properties(branch, idp=None, pad=None, short_pad=None,
                     'where properties.scenario = \'' + scenario + '\' '
                     'and economics.scenario = \'' + branch.scenario.economics + '\' '
                     'and forecasts.scenario = \'' + branch.scenario.forecast + '\' '
-                    'and forecasts.budget_type = \'' + budget_type + '\' '
+                    'and properties.budget_type = \'' + budget_type + '\' '
+                    'and properties.active = 1 ')
+    if grouping is not None:
+        if type(grouping) == list:
+            grouping_list = ', '.join('\'{0}\''.format(g) for g in grouping)
+        else:
+            grouping_list = '\'' + grouping + '\''
+        query = str('select properties.* from properties ' +
+                    'inner join economics on properties.propnum = economics.idp '
+                    'inner join forecasts on economics.idp = forecasts.idp '
+                    'where properties.scenario = \'' + branch.scenario.properties + '\' '
+                    'and economics.scenario = \'' + branch.scenario.economics + '\' '
+                    'and forecasts.scenario = \'' + branch.scenario.forecast + '\' '
+                    'and properties.grouping in (' + grouping_list + ') '
                     'and properties.active = 1 ')
     if project is not None:
         query = str('select * from projects where scenario = \'' + project[0] + '\'')
@@ -796,7 +809,11 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
     date_range = pd.date_range(effective_date, end_date, freq='D')
     prod_start_date = pd.Timestamp(prod_start_date.date())
     tmp_econ_df.prod_date = date_range
-    tmp_econ_df.eomonth = tmp_econ_df.prod_date + MonthEnd(1)
+    eomonth = []
+    for d in date_range:
+        day = calendar.monthrange(d.year, d.month)[1]
+        eomonth.append(datetime.datetime(d.year, d.month, day))
+    tmp_econ_df.eomonth = pd.to_datetime(pd.Series(eomonth))
     try:
         param = float(param)
         tmp_econ_df[param_name] = param
@@ -813,6 +830,7 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
         except:
             params = param.split(' ')
             _iter = enumerate(params)
+            prior_date = None
             for i, p in _iter:
                 if i == 0:
 
@@ -823,6 +841,7 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                             continue
                         except:
                             print('first value must be float, provided', p.strip('%'))
+                            sys.stdout.flush()
                         return
                     else:
                         try:
@@ -831,6 +850,7 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                             continue
                         except:
                             print('first value must be float, provided', p)
+                            sys.stdout.flush()
                         return
 
                 else:
@@ -842,17 +862,21 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                             other_val = params[i+4]
                         except:
                             print('missing values after if')
+                            sys.stdout.flush()
                             return
                         if op_val not in ops.keys():
                             print('invalid operator')
+                            sys.stdout.flush()
                             return
                         try:
                             date_val = pd.Timestamp(date_val)
                         except:
                             print('invalid date value', date_val)
+                            sys.stdout.flush()
                             return
                         if else_op != 'else':
                             print('invalid syntax', else_op)
+                            sys.stdout.flush()
                             return
                         if '%' in other_val:
                             try:
@@ -860,6 +884,7 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                                 other_unit = 'pct'
                             except:
                                 print('invalid alternate value', other_val.strip('%'))
+                                sys.stdout.flush()
                                 return
                         else:
                             try:
@@ -867,6 +892,7 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                                 other_unit = 'per'
                             except:
                                 print('invalid alternate value', other_val)
+                                sys.stdout.flush()
                                 return
                         if not ops[op_val](prod_start_date, date_val):
                             start_val = other_val
@@ -885,14 +911,18 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                             next_val = params[i+3]
                         except:
                             print('missing values after until')
+                            sys.stdout.flush()
                             return
                         try:
                             date_val = pd.Timestamp(date_val)
+                            sys.stdout.flush()
                         except:
                             print('invalid date value', date_val)
+                            sys.stdout.flush()
                             return
                         if then_op != 'then':
                             print('invalid syntax', then_op)
+                            sys.stdout.flush()
                             return
                         if '%'  in next_val:
                             try:
@@ -900,20 +930,27 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                                 next_unit = 'pct'
                             except:
                                 print('invalid next value', next_val.strip('%'))
+                                sys.stdout.flush()
                         else:
                             try:
                                 next_val = float(next_val)
                                 next_unit = 'per'
                             except:
                                 print('invalid next value', next_val)
+                                sys.stdout.flush()
                                 return
                         mask = operator.le(date_range, date_val)
+                        antimask = ~mask
+                        if prior_date is not None:
+                            mask = (operator.gt(date_range, prior_date) & operator.le(date_range, date_val))
+                            antimask = operator.gt(date_range, date_val)
                         tmp_econ_df.loc[mask, param_name] = start_val
                         tmp_econ_df.loc[mask, 'unit'] = start_unit
-                        tmp_econ_df.loc[~mask, param_name] = next_val
-                        tmp_econ_df.loc[~mask, 'unit'] = next_unit
+                        tmp_econ_df.loc[antimask, param_name] = next_val
+                        tmp_econ_df.loc[antimask, 'unit'] = next_unit
                         start_val = next_val
                         start_unit = next_unit
+                        prior_date = date_val
                         _ = next(_iter)
                         _ = next(_iter)
                         _ = next(_iter)
@@ -926,15 +963,18 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                             next_val = params[i+4]
                         except:
                             print('missing values after for')
+                            sys.stdout.flush()
                         try:
                             time_val = int(time_val)
                         except:
                             print('invalid time value', time_val)
+                            sys.stdout.flush()
                             return
                         if unit_val not in ('d', 'day', 'days',
                                             'mo', 'mos', 'month', 'months',
                                             'y', 'yr', 'yrs', 'year', 'years'):
                             print('unknown date unit', unit_val)
+                            sys.stdout.flush()
                             return
                         if '%'  in next_val:
                             try:
@@ -942,12 +982,14 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
                                 next_unit = 'pct'
                             except:
                                 print('invalid next value', next_val.strip('%'))
+                                sys.stdout.flush()
                         else:
                             try:
                                 next_val = float(next_val)
                                 next_unit = 'per'
                             except:
                                 print('invalid next value', next_val)
+                                sys.stdout.flush()
                                 return
                         if unit_val in ('d', 'day', 'days'):
                             delta = relativedelta(days=time_val)
@@ -971,41 +1013,159 @@ def econ_parser(param_name, param, effective_date, prod_start_date, end_date):
     tmp_econ_df.loc[tmp_econ_df.prod_date < prod_start_date, param_name] = 0.0
     return tmp_econ_df
 
-def capex_parser(param, effective_date, end_date):
+def misc_capex_parser(param, effective_date, end_date):
     tmp_df = pd.DataFrame(columns=['prod_date', 'eomonth', 'inv_g_misc'])
     date_range = pd.date_range(effective_date, end_date, freq='D')
     tmp_df.prod_date = date_range
-    tmp_df.eomonth = tmp_df.prod_date + MonthEnd(1)
+    eomonth = []
+    for d in date_range:
+        day = calendar.monthrange(d.year, d.month)[1]
+        eomonth.append(datetime.datetime(d.year, d.month, day))
+    tmp_df.eomonth = pd.to_datetime(pd.Series(eomonth))
     tmp_df.inv_g_misc = 0.0
     params = param.split(',')
     for p in params:
+        if p[0] == ' ':
+            p = p[1:]
         p_split = p.split(' ')
         if len(p_split) == 1:
             try:
                 p_split = float(p_split[0])
                 if p_split > 0.001:
-                    print('misc capex with no date provided')
+                    print('misc capex with no date provided', p_split)
+                    sys.stdout.flush()
                     return tmp_df
                 else:
                     return tmp_df
             except:
-                print('bad misc capex')
+                print('bad misc capex', p_split)
+                sys.stdout.flush()
                 return tmp_df
         if len(p_split) > 1:
             try:
                 p_cap = float(p_split[0])
             except:
                 print('capex not float')
+                sys.stdout.flush()
                 return tmp_df
             if p_split[1] != 'on':
                 print('invalid syntax, missing \'on\'')
+                sys.stdout.flush()
                 return tmp_df
             try:
                 p_date = pd.Timestamp(p_split[2])
             except:
                 print('invalid date')
+                sys.stdout.flush()
                 return tmp_df
             tmp_df.loc[tmp_df.prod_date == p_date, 'inv_g_misc'] = p_cap
+    return tmp_df
+
+def aban_capex_parser(param, end_of_life, effective_date, end_date):
+    tmp_df = pd.DataFrame(columns=['prod_date', 'eomonth', 'inv_g_aban'])
+    date_range = pd.date_range(effective_date, end_date, freq='D')
+    tmp_df.prod_date = date_range
+    eomonth = []
+    for d in date_range:
+        day = calendar.monthrange(d.year, d.month)[1]
+        eomonth.append(datetime.datetime(d.year, d.month, day))
+    tmp_df.eomonth = pd.to_datetime(pd.Series(eomonth))
+    tmp_df.inv_g_aban = 0.0
+    try:
+        p_cap = float(param)
+        tmp_df.loc[tmp_df.prod_date == end_of_life, 'inv_g_aban'] = p_cap
+    except:
+        sys.stdout.flush()
+        params = param.split(' ')
+        try:
+            p_cap = float(params[0])
+        except:
+            print('capex not float')
+            sys.stdout.flush()
+        if params[1] != 'after':
+            print('invalid syntax, missing \'after\'')
+            sys.stdout.flush()
+            return
+        try:
+            time_delta = int(params[2])
+        except:
+            print('bad time delta', params[2])
+            sys.stdout.flush()
+            return
+        unit_val = params[3]
+        if unit_val in ('d', 'day', 'days'):
+            delta = relativedelta(days=time_delta)
+        elif unit_val in ('m', 'mo', 'mos', 'month', 'months'):
+            delta = relativedelta(months=time_delta)
+        elif unit_val in ('y', 'yr', 'yrs', 'year', 'years'):
+            delta = relativedelta(years=time_delta)
+        else:
+            print('invalid timestep', unit_val)
+            sys.stdout.flush()
+            return
+        aban_date = pd.Timestamp(end_of_life) + delta
+        tmp_df.loc[tmp_df.prod_date == aban_date, 'inv_g_aban'] = p_cap
+    return tmp_df
+
+def min_life_parser(param, first_neg_date, effective_date, end_date):
+    tmp_df = pd.DataFrame(columns=['prod_date', 'eomonth', 'min_life'])
+    date_range = pd.date_range(effective_date, end_date, freq='D')
+    tmp_df.prod_date = date_range
+    eomonth = []
+    for d in date_range:
+        day = calendar.monthrange(d.year, d.month)[1]
+        eomonth.append(datetime.datetime(d.year, d.month, day))
+    tmp_df.eomonth = pd.to_datetime(pd.Series(eomonth))
+    tmp_df.min_life = 1
+    if param in ('loss ok', 'lossok', 'loss_ok'):
+        return tmp_df
+    try:
+        params = param.split(' ')
+    except:
+        print('invalid syntax, can\'t split', param)
+        sys.stdout.flush()
+        return
+    try:
+        time_delta = int(params[0])
+    except:
+        print('time value not int', params[0])
+        sys.stdout.flush()
+        return
+    unit_val = params[1]
+    if unit_val in ('d', 'day', 'days'):
+        delta = relativedelta(days=time_delta)
+    elif unit_val in ('m', 'mo', 'mos', 'month', 'months'):
+        delta = relativedelta(months=time_delta)
+    elif unit_val in ('y', 'yr', 'yrs', 'year', 'years'):
+        delta = relativedelta(years=time_delta)
+    else:
+        print('invalid timestep', unit_val)
+        sys.stdout.flush()
+        return
+    if len(params) > 2:
+        if params[2] != 'after':
+            print('invalid syntax, missing \'after\'')
+            return                
+        if len(params) == 5:
+            p = params[3] + ' ' + params[4]
+        else:
+            p = params[3]
+        if p in ('effective date', 'eff', 'eff date',
+                    'effective_date', 'eff', 'eff_date'):
+            min_date = effective_date + delta
+            if first_neg_date < min_date:
+                end_of_life = min_date
+            else:
+                end_of_life = first_neg_date
+        if p == 'life':
+            end_of_life = first_neg_date + delta
+    else:
+        min_date = effective_date + delta
+        if first_neg_date < min_date:
+            end_of_life = min_date
+        else:
+            end_of_life = first_neg_date
+    tmp_df.loc[tmp_df.prod_date > end_of_life, 'min_life'] = 0
     return tmp_df
 
 def load_output_from_sql(branch, scenario_name):
@@ -1037,18 +1197,22 @@ def delete_output(framework):
     conn = connect(framework.branch.tree.connection_dict)
     eng = engine(framework.branch.tree.connection_dict)
     cursor = conn.cursor()
+    if framework.rename is not None:
+        scenario = framework.rename
+    else:
+        scenario = framework.branch.scenario.scenario
     if framework.delete_all:
-        print('\ndeleting', framework.branch.scenario.scenario, 'from output table')
+        print('\ndeleting', scenario, 'from output table')
         sys.stdout.flush()
         query = str('delete from output '
-                    'where scenario = \'' + framework.branch.scenario.scenario + '\'')
+                    'where scenario = \'' + scenario + '\'')
     else:
         prop_list = framework.branch.properties.propnum.unique()
-        print('\ndeleting', len(prop_list), 'properties from output scenario', framework.branch.scenario.scenario)
+        print('\ndeleting', len(prop_list), 'properties from output scenario', scenario)
         sys.stdout.flush()
         prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
         query = str('delete from output '
-                    'where scenario = \'' + framework.branch.scenario.scenario + '\' '
+                    'where scenario = \'' + scenario + '\' '
                     'and idp in (' + prop_list + ')')
     cursor.execute(query)
     conn.commit()
@@ -1515,7 +1679,7 @@ def arps_fit(params, dmin, min_rate):
     af = (1/params[0])*(np.power((1-df), -params[0])-1)/365
     t = int((ai-af)/(params[0]*ai*af))
     m = np.arange(1, t+1)
-    m_exp = np.arange(1, 18250-t)
+    m_exp = np.arange(1, 45625-t)
     q = params[2]/np.power((1+params[0]*ai*m), 1/params[0])
     qf = np.insert(q, 0, params[2])
     n = (np.power(params[2], params[0])*(np.power(params[2],
@@ -1526,28 +1690,34 @@ def arps_fit(params, dmin, min_rate):
     n_exp = (q0_exp-qf_exp)/af
     forecast_exp = np.diff(n_exp, axis=0)
     forecast = np.concatenate([forecast_arps, forecast_exp])
+    if any(forecast < min_rate):
+        end_of_life = np.argmax(forecast < min_rate)
+    else:
+        end_of_life = len(forecast)
+    forecast = forecast[:end_of_life]
     if len(forecast) < 18250:
         np.concatenate([forecast, np.zeros(18250-len(forecast))])
-    forecast[forecast < min_rate] = 0.0
-    return forecast[:18250]
+
+    return forecast
 
 def residuals(params, y, dmin, min_rate, method='beta'):
-    if len(y) > 18240:
-        y = y[:18240]
+    fcst = arps_fit(params, dmin, min_rate)[:len(y)]
+    if len(fcst) < len(y):
+        fcst = np.concatenate([fcst, np.zeros(len(y) - len(fcst))])
     if method == 'beta':
         beta_x = np.linspace(0.01, 0.99, len(y))
-        cost = np.multiply(y - arps_fit(params, dmin, min_rate)[:len(y)],
-                           beta.pdf(beta_x, .98, 0.8))
+        cost = np.multiply(y - fcst, beta.pdf(beta_x, .98, 0.8))
         cost = np.divide(cost[y > 0], y[y > 0])
     if method == 'diff':
-        cost = y - arps_fit(params, dmin, min_rate)[:len(y)]
+        cost = y - fcst
     if method == 'frac':
-        cost = y / arps_fit(params, dmin, min_rate)[:len(y)]
+        cost = y / fcst
     return cost
 
 def delete_prod_info(forecaster, overwrite, forecast_type):
     start = time.time()
     prop_list = list(forecaster.branch.properties.propnum.unique())
+    num_prop = len(prop_list)
     if forecast_type:
         filtered_props = []
         for p in prop_list:
@@ -1561,15 +1731,15 @@ def delete_prod_info(forecaster, overwrite, forecast_type):
             elif p_type == forecast_type:
                 filtered_props.append(p)
         prop_list = filtered_props
+        num_prop = len(prop_list)
     if not overwrite:
         connection = connect(forecaster.branch.tree.connection_dict)
-        prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
         query = str('select distinct idp from prod_forecasts '
                     'where scenario = \'' + forecaster.branch.scenario.forecast + '\'')
         idp_list = pd.read_sql(query, connection)['idp'].values
-        prop_list = [idp for idp in idp_list if idp not in prop_list]
+        prop_list = [idp for idp in prop_list if idp not in idp_list]
+        num_prop = len(prop_list)
     if prop_list:
-        print(len(prop_list), 'total forecast info onelines deleted')
         prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
         conn = connect(forecaster.branch.tree.connection_dict)
         eng = engine(forecaster.branch.tree.connection_dict)
@@ -1577,6 +1747,7 @@ def delete_prod_info(forecaster, overwrite, forecast_type):
         query = str('delete from prod_forecasts_info '
                     'where scenario = \'' + forecaster.branch.scenario.forecast + '\' '
                     'and idp in (' + prop_list + ')')
+        print(num_prop, 'total forecast info onelines deleted')
         cursor.execute(query)
         conn.commit()
         cursor.close()
@@ -1694,11 +1865,10 @@ def delete_prod_forecasts(forecaster, overwrite, forecast_type):
         prop_list = filtered_props
     if not overwrite:
         connection = connect(forecaster.branch.tree.connection_dict)
-        prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
         query = str('select distinct idp from prod_forecasts '
                     'where scenario = \'' + forecaster.branch.scenario.forecast + '\'')
         idp_list = pd.read_sql(query, connection)['idp'].values
-        prop_list = [idp for idp in idp_list if idp not in prop_list]
+        prop_list = [idp for idp in prop_list if idp not in idp_list]
     if prop_list:
         print(len(prop_list), 'total forecasts deleted')
         prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
@@ -1800,6 +1970,26 @@ def join_dict(list_of_dicts):
         print('not a list')
         return None
 
+def prob_dict(u_val):
+    d = {}
+    u_val = u_val.split(',')
+    for i in u_val:
+        if i[0] == ' ':
+            i = i[1:]
+        i = i.split(':')
+        try:
+            val = float(i[1])
+        except:
+            val = i[1]
+        d[i[0]] = val
+    return d
+
+def load_probability_scenario(framework):
+    connection = connect(framework.branch.tree.connection_dict)
+    query = str('select * from probabilities '
+                'where scenario = \'' + framework.branch.scenario.probability  + '\'')
+    return pd.read_sql(query, connection)
+
 def apply_uncertainty(d):
     if d['distribution'] == 'normal':
         a = (d['min'] - d['mean']) / d['stdev']
@@ -1807,6 +1997,8 @@ def apply_uncertainty(d):
         return truncnorm.rvs(a, b, loc=d['mean'], scale=d['stdev'])
     if d['distribution'] == 'uniform':
         return np.random.uniform(d['min'], d['max'])
+    if d['distribution'] == 'constant':
+        return d['value']
 
 def apply_risk(d):
     p = d['probability']
@@ -1948,3 +2140,162 @@ def event_list(l, d, n):
             else:
                 e = int(i) + e
     return events
+
+def run_query(branch, filters, updates):
+    conn = connect(branch.tree.connection_dict)
+    eng = engine(branch.tree.connection_dict)
+        
+    start = time.time()
+    for table in updates.keys():
+        if table not in ('properties', 'economics', 'forecasts'):
+            print('only the properties, economics, and forecasts tables can be updated')
+        print('\nupdating table', table)
+        update_query = 'update ' + table + ' set '
+        select_query = 'select propnum, '
+        for column, value in updates[table].items():
+            if value[1] == 'string':
+                update_query = update_query + column + ' = \'' + str(value[0]) + '\', '
+            if value[1] == 'float':
+                update_query = update_query + column + ' = ' + str(value[0]) + ', '
+            if value[1] == 'literal':
+                update_query = update_query + column + ' = ' + value[0] + ', '
+            select_query = select_query + column + ', '
+        update_query = update_query[:-2]
+        update_query = update_query + ' from properties inner join economics on properties.propnum = economics.idp'
+        update_query = update_query + ' inner join forecasts on properties.propnum = forecasts.idp'
+        update_query = update_query + ' where properties.scenario = \'' + branch.scenario.properties + '\''
+        update_query = update_query + ' and economics.scenario = \'' + branch.scenario.economics + '\''
+        update_query = update_query + ' and forecasts.scenario = \'' + branch.scenario.forecast + '\''
+        select_query = select_query[:-2]
+        select_query = select_query + ' from properties inner join economics on properties.propnum = economics.idp'
+        select_query = select_query + ' inner join forecasts on properties.propnum = forecasts.idp'
+        select_query = select_query + ' where properties.scenario = \'' + branch.scenario.properties + '\''
+        select_query = select_query + ' and economics.scenario = \'' + branch.scenario.economics + '\''
+        select_query = select_query + ' and forecasts.scenario = \'' + branch.scenario.forecast + '\''
+        if filters is not None:
+            for tbl in filters.keys():
+                for column, value in filters[tbl].items():
+                    if value[2] == 'string':
+                        update_query = update_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' \'' + str(value[1]) + '\''
+                        select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' \'' + str(value[1]) + '\''
+                    if value[2] == 'float':
+                        update_query = update_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + str(value[1])
+                        select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + str(value[1])
+                    if value[2] == 'literal':
+                        update_query = update_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + value[1]
+                        select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + value[1]      
+        old_data = pd.read_sql(select_query, conn)
+        old_data = old_data.set_index('propnum').stack().reset_index()
+        old_data.rename(columns={'level_1': 'variable', 0: 'value'}, inplace=True)
+        old_data['change'] = 'original'
+        old_data['table_name'] = table
+
+        cursor = conn.cursor()
+        cursor.execute(update_query)
+        conn.commit()
+        cursor.close()
+
+        new_data = pd.read_sql(select_query, conn)
+        new_data = new_data.set_index('propnum').stack().reset_index()
+        new_data.rename(columns={'level_1': 'variable', 0: 'value'}, inplace=True)
+        new_data['change'] = 'update'
+        new_data['table_name'] = table
+        
+        change_log = pd.concat([old_data, new_data])
+        if table == 'properties':
+            scenario = branch.scenario.properties
+        if table == 'economics':
+            scenario = branch.scenario.economics
+        if table == 'forecasts':
+            scenario = branch.scenario.forecast
+        change_log['scenario'] = scenario
+        change_log['updated_by'] = os.getlogin()
+        change_log['updated_on'] = pd.Timestamp(datetime.datetime.now())
+        change_log['uuid'] = str(uuid.uuid1())
+
+        insert_query = ('insert into change_log ([propnum], [variable], [value], [change], ' +
+                        '[table_name], [scenario], [updated_by], [updated_on], [uuid])')
+        insert_query = insert_query + ' values (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        cursor = conn.cursor()
+        cursor.executemany(insert_query, change_log.itertuples(index=False, name=None))
+        conn.commit()
+        cursor.close()
+
+        stop = time.time()
+        timer(start, stop)
+    return
+
+def run_restore_query(branch, uuid_list):
+    conn = connect(branch.tree.connection_dict)
+    eng = engine(branch.tree.connection_dict)
+    if type(uuid_list) != list:
+        uuid_list = [uuid_list]
+    for uid in uuid_list:
+        print('restoring inputs for', uid)
+        query = ('select propnum, variable, ' +
+                 'value, change, table_name, ' +
+                 'scenario from change_log ' +
+                 'where change = \'original\' and uuid = \'' + uid + '\'')
+        new_data = pd.read_sql(query, conn)
+        table_name = new_data.table_name.unique()[0]
+        scenario = new_data.scenario.unique()[0]
+        columns = new_data.variable.unique()
+        df = new_data[['propnum', 'variable', 'value']]
+        num_prop = len(df.propnum.unique())
+
+        prop_list = ', '.join('\'{0}\''.format(p) for p in new_data.propnum.unique())
+        if table_name == 'properties':
+            change_query = 'select propnum, '
+        else:
+            change_query = 'select idp, '
+        for c in columns:
+            change_query = change_query + c + ', '
+        change_query = change_query[:-2]
+        change_query = change_query + ' from ' + table_name + ' where scenario = \'' + scenario + '\''
+        if table_name == 'properties':
+            change_query = change_query + ' and propnum in (' + prop_list + ')'
+        else:
+            change_query = change_query + ' and idp in (' + prop_list + ')'
+        old_data = pd.read_sql(change_query, conn)
+        old_data.rename(columns={'idp': 'propnum'}, inplace=True)
+        old_data = old_data.set_index('propnum').stack().reset_index()
+        old_data.rename(columns={'level_1': 'variable', 0: 'value'}, inplace=True)
+        old_data['change'] = 'original'
+        old_data['table_name'] = table_name
+        if table_name == 'properties':
+            scenario = branch.scenario.properties
+        if table_name == 'economics':
+            scenario = branch.scenario.economics
+        if table_name == 'forecasts':
+            scenario = branch.scenario.forecast
+        old_data['scenario'] = scenario
+        new_data['change'] = 'restore'
+        change_log = pd.concat([old_data, new_data])
+        change_log['updated_by'] = os.getlogin()
+        change_log['updated_on'] = pd.Timestamp(datetime.datetime.now())
+        change_log['uuid'] = str(uuid.uuid1())
+
+        insert_query = ('insert into change_log ([propnum], [variable], [value], [change], ' +
+                        '[table_name], [scenario], [updated_by], [updated_on], [uuid])')
+        insert_query = insert_query + ' values (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        cursor = conn.cursor()
+        cursor.executemany(insert_query, change_log.itertuples(index=False, name=None))
+        conn.commit()
+        cursor.close()
+
+        for i, p in enumerate(df.propnum.unique()):
+            # print('table', table_name, 'scenario', scenario, 'property', p, i+1, 'of', num_prop)
+            query = 'update ' + table_name + ' set '
+            for column in df[df.propnum == p].variable.unique():
+                value = df[(df.propnum == p) & (df.variable == column)].value.values[0]
+                query = query + column + ' = ' + value + ', '
+            query = query[:-2]
+            if table_name == 'properties':
+                query = query + ' where propnum = \'' + p + '\''
+            else:
+                query = query + ' where idp = \'' + p + '\''
+            query = query + ' and scenario = \'' + scenario + '\''
+            cursor = conn.cursor()
+            cursor.execute(query)
+            conn.commit()
+            cursor.close()
