@@ -1999,6 +1999,11 @@ def apply_uncertainty(d):
         return np.random.uniform(d['min'], d['max'])
     if d['distribution'] == 'constant':
         return d['value']
+    if d['distribution'] == 'coinflip':
+        if np.random.random() <= d['probability']:
+            return d['heads']
+        else:
+            return d['tails']
 
 def apply_risk(d):
     p = d['probability']
@@ -2010,6 +2015,8 @@ def apply_risk(d):
                 return truncnorm.rvs(a, b, loc=d['mean'], scale=d['stdev'])
             if d['distribution'] == 'uniform':
                 return np.random.uniform(d['min'], d['max'])
+            if d['distribution'] == 'constant':
+                return d['value']
         elif 'cost' in d.keys():
             return d['cost']
         elif 'ip_mult' in d.keys():

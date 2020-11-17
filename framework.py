@@ -308,7 +308,6 @@ class Framework():
             abandon = None
             if len(r) > 0:
                 for p in r.property_id.unique():
-                    print(p)
                     col = r[r.property_id == p].property.values[0]
                     properties = self.branch.properties[self.branch.properties[col] == p].propnum
                     r_p = r[r.property_id == p]
@@ -403,6 +402,8 @@ class Framework():
         for sim in range(num_simulations):
             print('simulation', sim + 1, 'of', num_simulations)
             sys.stdout.flush()
+            if sim != 0:
+                    self.load_probabilities()
             results.append(self.prepopulate(property_list))
         for i, sim in enumerate(results):
             if i == 0:
@@ -889,7 +890,6 @@ class Framework():
 
                 df['cf'][idx:idx+num_days] = (df['net_total_rev'][idx:idx+num_days] - df['loe'][idx:idx+num_days])
                 df['fcf'][idx:idx+num_days] = (df['cf'][idx:idx+num_days] - df['net_total_capex'][idx:idx+num_days])
-
                 date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date))
                 capex_mask = (df['net_total_capex'][idx:idx+num_days] < 0.01)
                 neg_fcf_mask = (df['fcf'][idx:idx+num_days] < -1)
@@ -976,8 +976,13 @@ class Framework():
                 risk_uncertainty[p]['curtailment'] = curtailment
                 risk_uncertainty[p]['frac_hit'] = frac_hit
                 risk_uncertainty[p]['spacing'] = spacing
+                risk_uncertainty[p]['btu_mult'] = btu_mult
+                risk_uncertainty[p]['ngl_yield_mult'] = ngl_price_mult
+                risk_uncertainty[p]['doe_mult'] = doe_mult
+                risk_uncertainty[p]['gtp_mult'] = gtp_mult
                 risk_uncertainty[p]['drill_mult'] = drill_mult
                 risk_uncertainty[p]['complete_mult'] = complete_mult
+                risk_uncertainty[p]['total_capex_mult'] = total_capex_mult
                 risk_uncertainty[p]['gas_price_mult'] = gas_price_mult
                 risk_uncertainty[p]['oil_price_mult'] = oil_price_mult
                 risk_uncertainty[p]['ngl_price_mult'] = ngl_price_mult
@@ -995,118 +1000,116 @@ class Framework():
                     risk_uncertainty[p]['oil_downtime'] = 0
                 risk_uncertainty[p]['delay'] = delay
 
-            t = df['input_gas_price'][idx:idx+num_days]
-            if any(t > 5):
-                print('1 BAD!!!!!!!!!!!!!!!!!', p)
+        if self.mc_pop:
+            if not self.mc_monthly:
+                #print('calculating metrics')
                 sys.stdout.flush()
-
-            t = df['input_gas_price']
-            if any(t > 5):
-                print('2 BAD!!!!!!!!!!!!!!!!!')
-                sys.stdout.flush()
-
-            if self.mc_pop:
-                if not self.mc_monthly:
-                    print(self.mc_monthly)
+                econ_dists = {'idp': np.empty(num_properties, dtype='object'),
+                            'gas_eur': np.zeros(num_properties),
+                            'ip90': np.zeros(num_properties),
+                            'drill_cost': np.zeros(num_properties),
+                            'compl_cost': np.zeros(num_properties),
+                            'infra_cost': np.zeros(num_properties),
+                            'avg_gas_price': np.zeros(num_properties),
+                            'avg_oil_price': np.zeros(num_properties),
+                            'avg_ngl_price': np.zeros(num_properties),
+                            'npv': np.zeros(num_properties),
+                            'irr': np.zeros(num_properties),
+                            'payout': np.zeros(num_properties),
+                            'year_1_roic': np.zeros(num_properties),
+                            'year_1_cf': np.zeros(num_properties),
+                            'year_1_fcf': np.zeros(num_properties),
+                            'year_2_roic': np.zeros(num_properties),
+                            'year_2_cf': np.zeros(num_properties),
+                            'year_2_fcf': np.zeros(num_properties),
+                            'tc_mult': np.zeros(num_properties),
+                            'ip_mult': np.zeros(num_properties),
+                            'curtailment': np.zeros(num_properties),
+                            'frac_hit': np.zeros(num_properties),
+                            'spacing': np.zeros(num_properties),
+                            'btu_mult': np.zeros(num_properties),
+                            'ngl_yield_mult': np.zeros(num_properties),
+                            'doe_mult': np.zeros(num_properties),
+                            'gtp_mult': np.zeros(num_properties),
+                            'drill_mult': np.zeros(num_properties),
+                            'complete_mult': np.zeros(num_properties),
+                            'total_capex_mult': np.zeros(num_properties),
+                            'gas_price_mult': np.zeros(num_properties),
+                            'oil_price_mult': np.zeros(num_properties),
+                            'ngl_price_mult': np.zeros(num_properties),
+                            'drill_risk': np.zeros(num_properties),
+                            'complete_risk': np.zeros(num_properties),
+                            'abandon': np.zeros(num_properties),
+                            'downtime': np.zeros(num_properties),
+                            'gas_downtime': np.zeros(num_properties),
+                            'oil_downtime': np.zeros(num_properties),
+                            'delay': np.zeros(num_properties),
+                            }
+                for n, p in enumerate(property_list):
+                    #print('economic metrics', p, n, 'of', len(property_list))
                     sys.stdout.flush()
-                    #print('calculating metrics')
-                    sys.stdout.flush()
-                    econ_dists = {'idp': np.empty(num_properties, dtype='object'),
-                                'gas_eur': np.zeros(num_properties),
-                                'ip90': np.zeros(num_properties),
-                                'drill_cost': np.zeros(num_properties),
-                                'compl_cost': np.zeros(num_properties),
-                                'infra_cost': np.zeros(num_properties),
-                                'avg_gas_price': np.zeros(num_properties),
-                                'avg_oil_price': np.zeros(num_properties),
-                                'avg_ngl_price': np.zeros(num_properties),
-                                'npv': np.zeros(num_properties),
-                                'irr': np.zeros(num_properties),
-                                'payout': np.zeros(num_properties),
-                                'year_1_roic': np.zeros(num_properties),
-                                'year_1_cf': np.zeros(num_properties),
-                                'year_1_fcf': np.zeros(num_properties),
-                                'year_2_roic': np.zeros(num_properties),
-                                'year_2_cf': np.zeros(num_properties),
-                                'year_2_fcf': np.zeros(num_properties),
-                                'tc_mult': np.zeros(num_properties),
-                                'ip_mult': np.zeros(num_properties),
-                                'curtailment': np.zeros(num_properties),
-                                'frac_hit': np.zeros(num_properties),
-                                'spacing': np.zeros(num_properties),
-                                'drill_mult': np.zeros(num_properties),
-                                'complete_mult': np.zeros(num_properties),
-                                'gas_price_mult': np.zeros(num_properties),
-                                'oil_price_mult': np.zeros(num_properties),
-                                'ngl_price_mult': np.zeros(num_properties),
-                                'drill_risk': np.zeros(num_properties),
-                                'complete_risk': np.zeros(num_properties),
-                                'abandon': np.zeros(num_properties),
-                                'downtime': np.zeros(num_properties),
-                                'gas_downtime': np.zeros(num_properties),
-                                'oil_downtime': np.zeros(num_properties),
-                                'delay': np.zeros(num_properties),
-                                }
-                    for n, p in enumerate(property_list):
-                        #print('economic metrics', p, n, 'of', len(property_list))
-                        sys.stdout.flush()
-                        df['fcf'][(df['idp'] == p) &
-                                (df['prod_date'] >= np.datetime64(prod_start_date)) &
-                                (df['net_total_capex'] < 0.01) &
-                                (df['fcf'] < 0.0)] = 0.0
-                        if self.start_discount == 'eff':
-                            econ_dists['npv'][n] = npv(df['fcf'][df['idp'] == p], 0.1).sum()
-                        if self.start_discount == 'drill':
-                            disc_val = np.npv(df['fcf'][(df['idp'] == p) & (df['prod_date'] >= np.datetime64(drill_start_date))], 0.1)
-                            disc_val = np.concatenate([np.zeros(num_days - len(disc_val)), disc_val])
-                            econ_dists['npv'][n] = disc_val.sum()
-                        start = np.nonzero(df['fcf'][df['idp'] == p])[0][0]
-                        end = np.nonzero(df['fcf'][df['idp'] == p])[0][-1]
-                        econ_dists['idp'][n] = p
-                        econ_dists['gas_eur'][n] = df['gross_gas'][df['idp'] == p].sum()
-                        try:
-                            prod_start = np.nonzero(df['gross_gas'][df['idp'] == p])[0][0]   
-                            econ_dists['ip90'][n] = df['gross_gas'][df['idp'] == p][prod_start:prod_start+90].sum()
-                        except:
-                            econ_dists['ip90'][n] = 0.0
-                        econ_dists['drill_cost'][n] = df['gross_drill_capex'][df['idp'] == p].sum()
-                        econ_dists['compl_cost'][n] = df['gross_compl_capex'][df['idp'] == p].sum()
-                        econ_dists['infra_cost'][n] = df['gross_misc_capex'][df['idp'] == p].sum()
-                        econ_dists['avg_gas_price'][n] = df['realized_gas_price'][df['idp'] == p].mean()
-                        econ_dists['avg_oil_price'][n] = df['realized_oil_price'][df['idp'] == p].mean()
-                        econ_dists['avg_ngl_price'][n] = df['realized_ngl_price'][df['idp'] == p].mean()
-                        if risk_uncertainty[p]['abandon'] is None:
-                            econ_dists['irr'][n] = xirr(df['fcf'][df['idp'] == p][start:end])
-                        else:
-                            econ_dists['irr'][n] = 0.0
-                        try:
-                            econ_dists['payout'][n] = np.where(df['fcf'][df['idp'] == p][start:end].cumsum() >= 0)[0][0] / (365.25/12)
-                        except:
-                            econ_dists['payout'][n] = np.nan
-                        econ_dists['year_1_cf'][n] = df['cf'][df['idp'] == p][start:start+365].sum()
-                        econ_dists['year_1_fcf'][n] = df['fcf'][df['idp'] == p][start:start+365].sum()
-                        econ_dists['year_1_roic'][n] = econ_dists['year_1_cf'][n] / df['net_total_capex'][df['idp'] == p].sum()
-                        econ_dists['year_2_cf'][n] = df['cf'][df['idp'] == p][start+365:start+2*365].sum()
-                        econ_dists['year_2_fcf'][n] = df['fcf'][df['idp'] == p][start+365:start+2*365].sum()
-                        econ_dists['year_2_roic'][n] = (econ_dists['year_1_cf'][n] +
-                                                        econ_dists['year_2_cf'][n]) / df['net_total_capex'][df['idp'] == p].sum()
-                        econ_dists['tc_mult'][n] = risk_uncertainty[p]['tc_mult']
-                        econ_dists['ip_mult'][n] = risk_uncertainty[p]['ip_mult']
-                        econ_dists['curtailment'][n] = risk_uncertainty[p]['curtailment']
-                        econ_dists['frac_hit'][n] = risk_uncertainty[p]['frac_hit']
-                        econ_dists['spacing'][n] = risk_uncertainty[p]['spacing']
-                        econ_dists['drill_mult'][n] = risk_uncertainty[p]['drill_mult']
-                        econ_dists['complete_mult'][n] = risk_uncertainty[p]['complete_mult']
-                        econ_dists['gas_price_mult'][n] = risk_uncertainty[p]['gas_price_mult']
-                        econ_dists['oil_price_mult'][n] = risk_uncertainty[p]['oil_price_mult']
-                        econ_dists['ngl_price_mult'][n] = risk_uncertainty[p]['ngl_price_mult']
-                        econ_dists['drill_risk'][n] = risk_uncertainty[p]['drill_risk']
-                        econ_dists['complete_risk'][n] = risk_uncertainty[p]['complete_risk']
-                        econ_dists['abandon'][n] = risk_uncertainty[p]['abandon']
-                        econ_dists['downtime'][n] = risk_uncertainty[p]['downtime']
-                        econ_dists['gas_downtime'][n] = risk_uncertainty[p]['gas_downtime']
-                        econ_dists['oil_downtime'][n] = risk_uncertainty[p]['oil_downtime']
-                        econ_dists['delay'][n] = risk_uncertainty[p]['delay']
+                    df['fcf'][(df['idp'] == p) &
+                            (df['prod_date'] >= np.datetime64(prod_start_date)) &
+                            (df['net_total_capex'] < 0.01) &
+                            (df['fcf'] < 0.0)] = 0.0
+                    if self.start_discount == 'eff':
+                        econ_dists['npv'][n] = npv(df['fcf'][df['idp'] == p], 0.1).sum()
+                    if self.start_discount == 'drill':
+                        disc_val = np.npv(df['fcf'][(df['idp'] == p) & (df['prod_date'] >= np.datetime64(drill_start_date))], 0.1)
+                        disc_val = np.concatenate([np.zeros(num_days - len(disc_val)), disc_val])
+                        econ_dists['npv'][n] = disc_val.sum()
+                    start = np.nonzero(df['fcf'][df['idp'] == p])[0][0]
+                    end = np.nonzero(df['fcf'][df['idp'] == p])[0][-1]
+                    econ_dists['idp'][n] = p
+                    econ_dists['gas_eur'][n] = df['gross_gas'][df['idp'] == p].sum()
+                    try:
+                        prod_start = np.nonzero(df['gross_gas'][df['idp'] == p])[0][0]   
+                        econ_dists['ip90'][n] = df['gross_gas'][df['idp'] == p][prod_start:prod_start+90].sum()
+                    except:
+                        econ_dists['ip90'][n] = 0.0
+                    econ_dists['drill_cost'][n] = df['gross_drill_capex'][df['idp'] == p].sum()
+                    econ_dists['compl_cost'][n] = df['gross_compl_capex'][df['idp'] == p].sum()
+                    econ_dists['infra_cost'][n] = df['gross_misc_capex'][df['idp'] == p].sum()
+                    econ_dists['avg_gas_price'][n] = df['realized_gas_price'][df['idp'] == p].mean()
+                    econ_dists['avg_oil_price'][n] = df['realized_oil_price'][df['idp'] == p].mean()
+                    econ_dists['avg_ngl_price'][n] = df['realized_ngl_price'][df['idp'] == p].mean()
+                    if risk_uncertainty[p]['abandon'] is None:
+                        econ_dists['irr'][n] = xirr(df['fcf'][df['idp'] == p][start:end])
+                    else:
+                        econ_dists['irr'][n] = 0.0
+                    try:
+                        econ_dists['payout'][n] = np.where(df['fcf'][df['idp'] == p][start:end].cumsum() >= 0)[0][0] / (365.25/12)
+                    except:
+                        econ_dists['payout'][n] = np.nan
+                    econ_dists['year_1_cf'][n] = df['cf'][df['idp'] == p][start:start+365].sum()
+                    econ_dists['year_1_fcf'][n] = df['fcf'][df['idp'] == p][start:start+365].sum()
+                    econ_dists['year_1_roic'][n] = econ_dists['year_1_cf'][n] / df['net_total_capex'][df['idp'] == p].sum()
+                    econ_dists['year_2_cf'][n] = df['cf'][df['idp'] == p][start+365:start+2*365].sum()
+                    econ_dists['year_2_fcf'][n] = df['fcf'][df['idp'] == p][start+365:start+2*365].sum()
+                    econ_dists['year_2_roic'][n] = (econ_dists['year_1_cf'][n] +
+                                                    econ_dists['year_2_cf'][n]) / df['net_total_capex'][df['idp'] == p].sum()
+                    econ_dists['tc_mult'][n] = risk_uncertainty[p]['tc_mult']
+                    econ_dists['ip_mult'][n] = risk_uncertainty[p]['ip_mult']
+                    econ_dists['curtailment'][n] = risk_uncertainty[p]['curtailment']
+                    econ_dists['frac_hit'][n] = risk_uncertainty[p]['frac_hit']
+                    econ_dists['spacing'][n] = risk_uncertainty[p]['spacing']
+                    econ_dists['btu_mult'][n] = risk_uncertainty[p]['btu_mult']
+                    econ_dists['ngl_yield_mult'][n] = risk_uncertainty[p]['ngl_yield_mult']
+                    econ_dists['doe_mult'][n] = risk_uncertainty[p]['doe_mult']
+                    econ_dists['gtp_mult'][n] = risk_uncertainty[p]['gtp_mult']
+                    econ_dists['drill_mult'][n] = risk_uncertainty[p]['drill_mult']
+                    econ_dists['complete_mult'][n] = risk_uncertainty[p]['complete_mult']
+                    econ_dists['total_capex_mult'][n] = risk_uncertainty[p]['total_capex_mult']
+                    econ_dists['gas_price_mult'][n] = risk_uncertainty[p]['gas_price_mult']
+                    econ_dists['oil_price_mult'][n] = risk_uncertainty[p]['oil_price_mult']
+                    econ_dists['ngl_price_mult'][n] = risk_uncertainty[p]['ngl_price_mult']
+                    econ_dists['drill_risk'][n] = risk_uncertainty[p]['drill_risk']
+                    econ_dists['complete_risk'][n] = risk_uncertainty[p]['complete_risk']
+                    econ_dists['abandon'][n] = risk_uncertainty[p]['abandon']
+                    econ_dists['downtime'][n] = risk_uncertainty[p]['downtime']
+                    econ_dists['gas_downtime'][n] = risk_uncertainty[p]['gas_downtime']
+                    econ_dists['oil_downtime'][n] = risk_uncertainty[p]['oil_downtime']
+                    econ_dists['delay'][n] = risk_uncertainty[p]['delay']
 
         if not self.mc_pop:
             print('chunk completed')
