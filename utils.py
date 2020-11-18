@@ -2151,7 +2151,7 @@ def event_list(l, d, n):
 def run_query(branch, filters, updates):
     conn = connect(branch.tree.connection_dict)
     eng = engine(branch.tree.connection_dict)
-        
+    prop_list = ', '.join('\'{0}\''.format(p) for p in branch.properties.propnum.unique())
     start = time.time()
     for table in updates.keys():
         if table not in ('properties', 'economics', 'forecasts'):
@@ -2173,12 +2173,14 @@ def run_query(branch, filters, updates):
         update_query = update_query + ' where properties.scenario = \'' + branch.scenario.properties + '\''
         update_query = update_query + ' and economics.scenario = \'' + branch.scenario.economics + '\''
         update_query = update_query + ' and forecasts.scenario = \'' + branch.scenario.forecast + '\''
+        update_query = update_query + ' and properties.propnum in (' + prop_list + ')'
         select_query = select_query[:-2]
         select_query = select_query + ' from properties inner join economics on properties.propnum = economics.idp'
         select_query = select_query + ' inner join forecasts on properties.propnum = forecasts.idp'
         select_query = select_query + ' where properties.scenario = \'' + branch.scenario.properties + '\''
         select_query = select_query + ' and economics.scenario = \'' + branch.scenario.economics + '\''
         select_query = select_query + ' and forecasts.scenario = \'' + branch.scenario.forecast + '\''
+        select_query = select_query + ' and properties.propnum in (' + prop_list + ')'
         if filters is not None:
             for tbl in filters.keys():
                 for column, value in filters[tbl].items():
@@ -2190,7 +2192,7 @@ def run_query(branch, filters, updates):
                         select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + str(value[1])
                     if value[2] == 'literal':
                         update_query = update_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + value[1]
-                        select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + value[1]      
+                        select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + value[1] 
         old_data = pd.read_sql(select_query, conn)
         old_data = old_data.set_index('propnum').stack().reset_index()
         old_data.rename(columns={'level_1': 'variable', 0: 'value'}, inplace=True)
