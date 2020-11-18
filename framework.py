@@ -13,6 +13,7 @@ import pickle
 import uuid
 np.seterr(over='ignore')
 pd.options.display.float_format = '{:,.2f}'.format
+from itertools import groupby
 # import line_profiler
 # import atexit
 # profile = line_profiler.LineProfiler()
@@ -890,9 +891,9 @@ class Framework():
 
                 df['cf'][idx:idx+num_days] = (df['net_total_rev'][idx:idx+num_days] - df['loe'][idx:idx+num_days])
                 df['fcf'][idx:idx+num_days] = (df['cf'][idx:idx+num_days] - df['net_total_capex'][idx:idx+num_days])
-                date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date))
+                date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date + relativedelta(days=30)))
                 capex_mask = (df['net_total_capex'][idx:idx+num_days] < 0.01)
-                neg_fcf_mask = (df['fcf'][idx:idx+num_days] < -1)
+                neg_fcf_mask = (df['fcf'][idx:idx+num_days] < -3.33)
                 combined_mask = np.logical_and(date_mask, capex_mask)
                 combined_mask = np.logical_and(combined_mask, neg_fcf_mask)
                 min_life_val = self.economics[p].__dict__['minimum_life']

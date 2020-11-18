@@ -2192,7 +2192,7 @@ def run_query(branch, filters, updates):
                         select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + str(value[1])
                     if value[2] == 'literal':
                         update_query = update_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + value[1]
-                        select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + value[1] 
+                        select_query = select_query + ' and ' + tbl + '.' + column + ' ' + str(value[0]) + ' ' + value[1]
         old_data = pd.read_sql(select_query, conn)
         old_data = old_data.set_index('propnum').stack().reset_index()
         old_data.rename(columns={'level_1': 'variable', 0: 'value'}, inplace=True)
