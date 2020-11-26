@@ -52,6 +52,17 @@ class Schedule():
         self.show_gantt = show_gantt
         
         self.build_dictionaries()
+
+        if self.branch.probability:
+            if self.branch.framework is None:
+                self.risk, self.uncertainty = load_probabilities(self.branch)
+            else:
+                self.risk = None
+                self.uncertainty = None
+        else:
+            self.risk = None
+            self.uncertainty = None
+
         self.load_schedule_inputs()
         self.calc_dates()
         self.gantt_chart()
@@ -138,7 +149,7 @@ class Schedule():
 
         self.schedule_dates['scenario'] = pd.Series([self.name]*len(self.well_dict.keys()))
         self.schedule_dates['idp'] = pd.Series(list(self.well_dict.keys()))
-             
+
     def load_schedule_inputs(self):
         print('loading schedule inputs')
         self.schedule_inputs = load_schedule_inputs(self.branch)

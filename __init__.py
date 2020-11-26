@@ -307,6 +307,7 @@ class Branch():
         print('creating branch:\t\t\t'+branch_name)
         self.name = branch_name
         self.tree = tree
+        self.probability = False
         if scenario is not None:
             self.scenario = self.branch_scenario(scenario)
         else:

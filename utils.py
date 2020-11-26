@@ -159,7 +159,6 @@ def load_scenario(branch, scenario):
 def check_scenario(branch, scenario):
     conn = connect(branch.tree.connection_dict)
     for k, v in scenario.items():
-
         if k == 'autoforecaster' and v is not None:
             query = str('select top 10 * from autoforecaster ' +
                         'where scenario = \'' + v + '\'')
@@ -236,7 +235,8 @@ def check_scenario(branch, scenario):
             if temp.empty:
                 print('no', v, 'in areas')
                 return False
-
+        if k == 'probability' and v is not None:
+            branch.probability = True
     return True
 
 def update_daily_production(tree):
@@ -1740,6 +1740,8 @@ def delete_prod_info(forecaster, overwrite, forecast_type):
         prop_list = [idp for idp in prop_list if idp not in idp_list]
         num_prop = len(prop_list)
     if prop_list:
+        print('deleting', num_prop, 'forecast info onelines')
+        sys.stdout.flush()
         prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
         conn = connect(forecaster.branch.tree.connection_dict)
         eng = engine(forecaster.branch.tree.connection_dict)
@@ -1870,7 +1872,8 @@ def delete_prod_forecasts(forecaster, overwrite, forecast_type):
         idp_list = pd.read_sql(query, connection)['idp'].values
         prop_list = [idp for idp in prop_list if idp not in idp_list]
     if prop_list:
-        print(len(prop_list), 'total forecasts deleted')
+        print('deleting', len(prop_list), 'forecasts')
+        sys.stdout.flush()
         prop_list = ', '.join('\'{0}\''.format(p) for p in prop_list)
         conn = connect(forecaster.branch.tree.connection_dict)
         eng = engine(forecaster.branch.tree.connection_dict)
@@ -1984,10 +1987,10 @@ def prob_dict(u_val):
         d[i[0]] = val
     return d
 
-def load_probability_scenario(framework):
-    connection = connect(framework.branch.tree.connection_dict)
+def load_probability_scenario(branch):
+    connection = connect(branch.tree.connection_dict)
     query = str('select * from probabilities '
-                'where scenario = \'' + framework.branch.scenario.probability  + '\'')
+                'where scenario = \'' + branch.scenario.probability  + '\'')
     return pd.read_sql(query, connection)
 
 def apply_uncertainty(d):
@@ -2308,3 +2311,95 @@ def run_restore_query(branch, uuid_list):
             cursor.execute(query)
             conn.commit()
             cursor.close()
+
+def load_probabilities(branch):
+    num_prop = len(branch.properties.propnum)
+    uncertainty = {
+        'idp': branch.properties.propnum.values,
+        'drill_time': [1.0] * num_prop,
+        'performance': [1.0] * num_prop,
+        'profile': [1.0] * num_prop,
+        'drill_cost': [1.0] * num_prop,
+        'complete_cost': [1.0] * num_prop,
+        'gas_price': [1.0] * num_prop,
+        'oil_price': [1.0] * num_prop,
+        'ngl_price': [1.0] * num_prop,
+        'ngl_yield': [1.0] * num_prop,
+        'btu': [1.0] * num_prop,
+        'shrink': [1.0] * num_prop,
+        'doe': [1.0] * num_prop,
+        'gtp': [1.0] * num_prop,
+        'total_capex': [1.0] * num_prop,
+        'infra_cost': [0.0] * num_prop
+    }
+    uncertainty = pd.DataFrame(uncertainty)
+
+    risk = {
+        'idp': branch.properties.propnum.values,
+        'performance': [None] * num_prop,
+        'profile': [1.0] * num_prop,
+        'curtailment': [None] * num_prop,
+        'frac_hit': [None] * num_prop,
+        'spacing': [None] * num_prop,
+        'drill_cost': [None] * num_prop,
+        'complete_cost': [None] * num_prop,
+        'abandon': [None] * num_prop,
+        'downtime': [None] * num_prop,
+        'frequency': [None] * num_prop,
+        'duration': [None] * num_prop,
+        'downtime_mult': [None] * num_prop,
+        'gas_downtime': [None] * num_prop,
+        'oil_downtime': [None] * num_prop,
+        'delay': [None] * num_prop,
+    }
+    risk = pd.DataFrame(risk)
+    if branch.scenario.probability is not None:
+        print('initializing probability model')
+        df = load_probability_scenario(branch)
+
+        u = df[df.category == 'uncertainty']
+        if len(u) > 0:
+            for p in u.property_id.unique():
+                col = u[u.property_id == p].property.values[0]
+                properties = branch.properties[branch.properties[col] == p].propnum
+                u_p = u[u.property_id == p]
+                for t in u_p.type.unique():
+                        d = prob_dict(u_p[u_p.type == t].value.values[0])
+                        uncertainty.loc[uncertainty.idp.isin(properties), t] = apply_uncertainty(d)
+
+        r = df[df.category == 'risk']
+        abandon = None
+        if len(r) > 0:
+            for p in r.property_id.unique():
+                col = r[r.property_id == p].property.values[0]
+                properties = branch.properties[branch.properties[col] == p].propnum
+                r_p = r[r.property_id == p]
+                if 'abandon' in r_p.type.values:
+                    d = prob_dict(r_p[r_p.type == 'abandon'].value.values[0])
+                    abandon = apply_risk(d)
+                    if abandon is not None:
+                        risk.loc[risk.idp.isin(properties), 'performance'] = 0.0
+                        risk.loc[risk.idp.isin(properties), 'profile'] = 0.0
+                    risk.loc[risk.idp.isin(properties), 'abandon'] = abandon
+                for t in r_p.type.values:
+                    if t == 'abandon':
+                        continue
+                    if abandon is None:
+                        if t == 'downtime':
+                            d = prob_dict(r_p[r_p.type == t].value.values[0])
+                            risk.loc[risk.idp.isin(properties), 'downtime'] = True
+                            risk.loc[risk.idp.isin(properties), 'frequency'] = d['frequency']
+                            risk.loc[risk.idp.isin(properties), 'duration'] = d['duration']
+                            risk.loc[risk.idp.isin(properties), 'downtime_mult'] = d['mult']
+                        else:
+                            d = prob_dict(r_p[r_p.type == t].value.values[0])
+                            r_val = apply_risk(d)
+                            if t == 'delay':
+                                if r_val is not None:
+                                    r_val = int(r_val)
+                            risk.loc[risk.idp.isin(properties), t] = r_val
+
+    uncertainty = uncertainty
+    risk = risk
+
+    return risk, uncertainty

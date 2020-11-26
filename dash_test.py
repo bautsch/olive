@@ -177,8 +177,8 @@ class plot():
                 d = None
             
             fig = go.Figure()
-
-            if forecast.prod_date[0]:
+            
+            if len(forecast.prod_date) > 0:
                 self.idf = forecast[forecast.prod_date == self.last_prod_date].index[0]
                 sys.stdout.flush()
                 fig.add_trace(go.Scatter(x=forecast.prod_date[self.idf:],
@@ -241,7 +241,7 @@ class plot():
             if self.new_hindcast is not None:
                 fig.add_trace(self.new_hindcast)
 
-            if forecast.prod_date[0]:
+            if len(forecast.prod_date) > 0:
                 eur = self.tmp_prod_info['eur'][0]
                 textstr = '<br>'.join(('idp: ' + self.idp,
                                     'name: ' + self.well.well_name,

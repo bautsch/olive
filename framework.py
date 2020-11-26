@@ -40,7 +40,11 @@ class Framework():
         self.aggregations = {}
         self.load_framework()
         self.load_well_data()
-        self.load_probabilities()
+        if self.branch.schedule is not None and self.branch.probability:
+            self.uncertainty = self.branch.schedule.uncertainty
+            self.risk = self.branch.schedule.risk
+        else:
+            self.risk, self.uncertainty = load_probabilities(self.branch)
 
     def __repr__(self):
         print_dict = {}
@@ -249,95 +253,6 @@ class Framework():
             else:
                 print('price deck verification succeeded')
                 gas_check = False
-
-    def load_probabilities(self):
-        num_prop = len(self.branch.properties.propnum)
-        uncertainty = {
-            'idp': self.branch.properties.propnum.values,
-            'performance': [1.0] * num_prop,
-            'profile': [1.0] * num_prop,
-            'drill_cost': [1.0] * num_prop,
-            'complete_cost': [1.0] * num_prop,
-            'gas_price': [1.0] * num_prop,
-            'oil_price': [1.0] * num_prop,
-            'ngl_price': [1.0] * num_prop,
-            'ngl_yield': [1.0] * num_prop,
-            'btu': [1.0] * num_prop,
-            'shrink': [1.0] * num_prop,
-            'doe': [1.0] * num_prop,
-            'gtp': [1.0] * num_prop,
-            'total_capex': [1.0] * num_prop,
-            'infra_cost': [0.0] * num_prop
-        }
-        uncertainty = pd.DataFrame(uncertainty)
-
-        risk = {
-            'idp': self.branch.properties.propnum.values,
-            'performance': [None] * num_prop,
-            'profile': [1.0] * num_prop,
-            'curtailment': [None] * num_prop,
-            'frac_hit': [None] * num_prop,
-            'spacing': [None] * num_prop,
-            'drill_cost': [None] * num_prop,
-            'complete_cost': [None] * num_prop,
-            'abandon': [None] * num_prop,
-            'downtime': [None] * num_prop,
-            'frequency': [None] * num_prop,
-            'duration': [None] * num_prop,
-            'downtime_mult': [None] * num_prop,
-            'gas_downtime': [None] * num_prop,
-            'oil_downtime': [None] * num_prop,
-            'delay': [None] * num_prop,
-        }
-        risk = pd.DataFrame(risk)
-
-        if self.branch.scenario.probability is not None:
-            print('initializing probability model')
-            df = load_probability_scenario(self)
-
-            u = df[df.category == 'uncertainty']
-            if len(u) > 0:
-                for p in u.property_id.unique():
-                    col = u[u.property_id == p].property.values[0]
-                    properties = self.branch.properties[self.branch.properties[col] == p].propnum
-                    u_p = u[u.property_id == p]
-                    for t in u_p.type.unique():
-                            d = prob_dict(u_p[u_p.type == t].value.values[0])
-                            uncertainty.loc[uncertainty.idp.isin(properties), t] = apply_uncertainty(d)
-
-            r = df[df.category == 'risk']
-            abandon = None
-            if len(r) > 0:
-                for p in r.property_id.unique():
-                    col = r[r.property_id == p].property.values[0]
-                    properties = self.branch.properties[self.branch.properties[col] == p].propnum
-                    r_p = r[r.property_id == p]
-                    if 'abandon' in r_p.type.values:
-                        d = prob_dict(r_p[r_p.type == 'abandon'].value.values[0])
-                        abandon = apply_risk(d)
-                        if abandon is not None:
-                            risk.loc[risk.idp.isin(properties), 'performance'] = 0.0
-                            risk.loc[risk.idp.isin(properties), 'profile'] = 0.0
-                        risk.loc[risk.idp.isin(properties), 'abandon'] = abandon
-                    for t in r_p.type.values:
-                        if t == 'abandon':
-                            continue
-                        if abandon is None:
-                            if t == 'downtime':
-                                d = prob_dict(r_p[r_p.type == t].value.values[0])
-                                risk.loc[risk.idp.isin(properties), 'downtime'] = True
-                                risk.loc[risk.idp.isin(properties), 'frequency'] = d['downtime']['frequency']
-                                risk.loc[risk.idp.isin(properties), 'duration'] = d['downtime']['duration']
-                                risk.loc[risk.idp.isin(properties), 'downtime_mult'] = d['downtime']['mult']
-                            else:
-                                d = prob_dict(r_p[r_p.type == t].value.values[0])
-                                r_val = apply_risk(d)
-                                if t == 'delay':
-                                    r_val = int(r_val)
-                                risk.loc[risk.idp.isin(properties), t] = r_val
-
-        self.uncertainty = uncertainty
-        self.risk = risk
 
     def run_mc(self):
         start = time.time()
@@ -636,7 +551,7 @@ class Framework():
                     forecast = pd.concat([padding, forecast])
                 time_on = forecast.time_on.values
                 if forecast.empty:
-                    # print('missing base forecast', p, f.prod_forecast_scenario, f.forecast)
+                    print('missing base forecast', p, f.prod_forecast_scenario, f.forecast)
                     sys.stdout.flush()
                     df['scenario'][idx:idx+num_days] = np.nan
                     continue
@@ -739,7 +654,7 @@ class Framework():
                 df['wi'][idx:idx+num_days] = inputs['wi_frac'].wi_frac.values
                 df['nri'][idx:idx+num_days] = inputs['nri_frac'].nri_frac.values
                 df['royalty'][idx:idx+num_days] = inputs['roy_frac'].roy_frac.values
-              
+
                 df['net_gas'][idx:idx+num_days] = (df['gross_gas'][idx:idx+num_days] * df['nri'][idx:idx+num_days] *
                                                    df['shrink'][idx:idx+num_days])
                 df['net_oil'][idx:idx+num_days] = df['gross_oil'][idx:idx+num_days] * df['nri'][idx:idx+num_days]
@@ -897,7 +812,6 @@ class Framework():
                 combined_mask = np.logical_and(date_mask, capex_mask)
                 combined_mask = np.logical_and(combined_mask, neg_fcf_mask)
                 min_life_val = self.economics[p].__dict__['minimum_life']
-
                 if sum(combined_mask) > 1:
                     first_neg = np.argmax(combined_mask == True)
                     first_neg_date = df['prod_date'][idx:idx+num_days][first_neg]
