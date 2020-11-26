@@ -292,7 +292,7 @@ class Framework():
                 print('simulation', sim + 1, 'of', self.num_simulations)
                 sys.stdout.flush()
                 if sim != 0:
-                     self.load_probabilities()
+                     load_probabilities()
                 if not self.mc_monthly:
                     results.append(self.run_populate())
                 else:
@@ -319,7 +319,7 @@ class Framework():
             print('simulation', sim + 1, 'of', num_simulations)
             sys.stdout.flush()
             if sim != 0:
-                    self.load_probabilities()
+                    load_probabilities()
             results.append(self.prepopulate(property_list))
         for i, sim in enumerate(results):
             if i == 0:
