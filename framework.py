@@ -76,6 +76,7 @@ class Framework():
         self.daily_output = sql_load['daily_output']
         self.start_discount = sql_load['start_discount']
 
+        self.pv_spread = None
         self.pv_spread = sql_load['pv_spread']
         if self.pv_spread is None:
             self.pv_spread = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
@@ -89,8 +90,6 @@ class Framework():
                 self.pv_spread = self.pv_spread[:10]
         print('pv spread', ', '.join(self.pv_spread), '\n')
         sys.stdout.flush()
-
-        self.min_life = int(sql_load['min_life'])
 
     def load_well_data(self, properties=None):
         print('initializing forecasts')
@@ -384,6 +383,8 @@ class Framework():
             else:
                 return pd.concat(temp_c)
         else:
+            print('single loop')
+            sys.stdout.flush()
             return self.populate(property_list)
 
     def populate(self, property_list):
@@ -396,10 +397,10 @@ class Framework():
             scenario = self.branch.scenario.scenario
 
         if self.production_only:
-            #print('building gross production profile')
+            print('building gross production profile')
             sys.stdout.flush()
         else:
-            #print('building gross production profile and generating economics')
+            print('building gross production profile and generating economics')
             sys.stdout.flush()
 
         num_properties = len(property_list)
@@ -454,7 +455,7 @@ class Framework():
 
         for n, p in enumerate(property_list):
             idx = n * num_days
-            # print('production', p, n+1, 'of', num_properties)
+            # print(p, n+1, 'of', num_properties)
             sys.stdout.flush()
             f = self.forecasts[p]
             budget_flag = self.branch.model[p].budget_type
@@ -533,8 +534,9 @@ class Framework():
                 forecast = load_forecast(self, p, f.prod_forecast_scenario, t_start, t_end)
                 if forecast.empty:
                     print('missing wedge forecast', p, f.prod_forecast_scenario, f.forecast)
+                    print('continuing with output')
                     df['scenario'][idx:idx+num_days] = np.nan
-                    return
+                    continue
 
             if budget_type == 'base':
                 forecast = load_forecast(self, p, f.prod_forecast_scenario, t_start=None, t_end=None,
@@ -1028,11 +1030,11 @@ class Framework():
 
         if not self.mc_pop:
             print('chunk completed')
+            sys.stdout.flush()
             t = df['input_gas_price']
             if any(t > 5):
                 print('3 BAD!!!!!!!!!!!!!!!!!')
                 sys.stdout.flush()
-            sys.stdout.flush()
             if self.production_only:
                 return df
             df['prod_date'][df['idp'] == None] = None
