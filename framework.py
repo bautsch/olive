@@ -987,9 +987,9 @@ class Framework():
                     econ_dists['drill_cost'][n] = df['gross_drill_capex'][df['idp'] == p].sum()
                     econ_dists['compl_cost'][n] = df['gross_compl_capex'][df['idp'] == p].sum()
                     econ_dists['infra_cost'][n] = df['gross_misc_capex'][df['idp'] == p].sum()
-                    econ_dists['avg_gas_price'][n] = df['realized_gas_price'][df['idp'] == p) & (df['realized_gas_price'] > 0)].mean()
-                    econ_dists['avg_oil_price'][n] = df['realized_oil_price'][df['idp'] == p) & (df['realized_gas_price'] > 0)].mean()
-                    econ_dists['avg_ngl_price'][n] = df['realized_ngl_price'][df['idp'] == p) & (df['realized_gas_price'] > 0)].mean()
+                    econ_dists['avg_gas_price'][n] = df['realized_gas_price'][(df['idp'] == p) & (df['realized_gas_price'] > 0)].mean()
+                    econ_dists['avg_oil_price'][n] = df['realized_oil_price'][(df['idp'] == p) & (df['realized_gas_price'] > 0)].mean()
+                    econ_dists['avg_ngl_price'][n] = df['realized_ngl_price'][(df['idp'] == p) & (df['realized_gas_price'] > 0)].mean()
                     if risk_uncertainty[p]['abandon'] is None:
                         econ_dists['irr'][n] = xirr(df['fcf'][df['idp'] == p][start:end])
                     else:
