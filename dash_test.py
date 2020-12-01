@@ -460,6 +460,7 @@ def change_figure(prev_btn, next_btn, plot_btn, update_btn, clear_btn,  save_btn
                 p.tmp_fcst_dict = manual_fit(p.well, start_date, p.production, p.tmp_yields_dict,
                                             p.prod_type, [b, di, ip], dmin, min_rate)
                 p.tmp_prod_info['eur'] = [p.tmp_fcst_dict[p.prod_type].sum()]
+                
                 p.new_fit = go.Scatter(x=p.tmp_fcst_dict['prod_date'][p.idf:p.idf+500],
                                     y=p.tmp_fcst_dict[p.prod_type][p.idf:p.idf+500],
                                     line={'dash': 'dash',
@@ -525,18 +526,6 @@ def change_figure(prev_btn, next_btn, plot_btn, update_btn, clear_btn,  save_btn
 
 def manual_fit(well, fcst_start_date, production, yields_dict,
                prod_type, params, dmin, min_rate):
-    fcst_dict = {'scenario': [well.forecasts.prod_forecast_scenario] * 18250,
-                 'idp': [well.idp] * 18250,
-                 'forecast': [well.forecasts.forecast] * 18250,
-                 'time_on': np.arange(1, 18251),
-                 'prod_date': [None] * 18250,
-                 'prod_cat': ['forecast'] * 18250,
-                 'gas': np.zeros(18250),
-                 'oil': np.zeros(18250),
-                 'water': np.zeros(18250),
-                 'cum_gas': np.zeros(18250),
-                 'cum_oil': np.zeros(18250),
-                 'cum_water': np.zeros(18250)}
 
     forecast = arps_fit(params, dmin, min_rate)
 
@@ -551,25 +540,52 @@ def manual_fit(well, fcst_start_date, production, yields_dict,
     fcst_start_date = pd.Timestamp(fcst_start_date)
     start_idx = prod_time - (fcst_start_date - production.prod_date.min()).days - 2
     forecast = np.concatenate([production[prod_type].values[:-2], forecast[start_idx:]])
-    forecast = forecast[:18250]
+    l = len(forecast)
+
+    fcst_dict = {'scenario': [well.forecasts.prod_forecast_scenario] * l,
+                 'idp': [well.idp] * l,
+                 'forecast': [well.forecasts.forecast] * l,
+                 'time_on': np.arange(1, l+1),
+                 'prod_date': [None] * l,
+                 'prod_cat': ['forecast'] * l,
+                 'gas': np.zeros(l),
+                 'oil': np.zeros(l),
+                 'water': np.zeros(l),
+                 'cum_gas': np.zeros(l),
+                 'cum_oil': np.zeros(l),
+                 'cum_water': np.zeros(l)}
+
     fcst_dict[prod_type] = forecast
     fcst_dict[str('cum_' + prod_type)] = forecast.cumsum()
 
     for t, y in yields_dict.items():
-        if y is not None and y == y:
-            if t == prod_type:
-                yields_dict[t] = None
+        if y is not None:
             if t == 'gas':
-                fcst_dict['gas'] = fcst_dict['oil'] * y
+                if production['gas'].sum() > 0.0:
+                    fcst_dict['gas'] = np.concatenate([production['gas'][:start_idx],
+                                                fcst_dict['oil'][start_idx:] * y])
+                else:
+                    fcst_dict['gas'] = fcst_dict['oil'] * y
+                fcst_dict[t] = np.nan_to_num(fcst_dict[t], copy=True, nan=0.0, neginf=0.0, posinf=0.0)
                 fcst_dict['cum_gas'] = fcst_dict['gas'].cumsum()
             if t == 'oil':
-                fcst_dict['oil'] = fcst_dict['gas'] * y / 1000
+                if production['oil'].sum() > 0.0:
+                    fcst_dict['oil'] = np.concatenate([production['oil'][:start_idx],
+                                                        fcst_dict['gas'][start_idx:] * y / 1000])
+                else:
+                    fcst_dict['oil'] = fcst_dict['gas'] * y / 1000
+                fcst_dict[t] = np.nan_to_num(fcst_dict[t], copy=True, nan=0.0, neginf=0.0, posinf=0.0)
                 fcst_dict['cum_oil'] = fcst_dict['oil'].cumsum()
             if t == 'water':
-                fcst_dict['water'] = fcst_dict['gas'] * y / 1000
+                if production['water'].sum() > 0.0:
+                    fcst_dict['water'] = np.concatenate([production['water'][:start_idx],
+                                                fcst_dict['gas'][start_idx:] * y / 1000])
+                else:
+                    fcst_dict['water'] = fcst_dict['gas'] * y / 1000
+                fcst_dict[t] = np.nan_to_num(fcst_dict[t], copy=True, nan=0.0, neginf=0.0, posinf=0.0)
                 fcst_dict['cum_water'] = fcst_dict['water'].cumsum()
 
-    prod_date = pd.date_range(production.prod_date.min(), periods=18250, freq='D')
+    prod_date = pd.date_range(production.prod_date.min(), periods=l, freq='D')
     fcst_dict['prod_date'] = prod_date
 
     prod_cat = ['actual'] * len(production[:start_idx])
@@ -577,8 +593,12 @@ def manual_fit(well, fcst_start_date, production, yields_dict,
     prod_cat.extend(forecast_cat)
     fcst_dict['prod_cat'] = prod_cat
 
-    time_on = time_on = np.arange(1, 18251)
-    fcst_dict['time_on'] = time_on
+    for k, v in fcst_dict.items():
+        print(k, len(v))
+        sys.stdout.flush()
+
+    test = pd.DataFrame(fcst_dict)
+    test.to_csv('test.csv')
 
     return fcst_dict
 

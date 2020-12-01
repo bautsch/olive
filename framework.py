@@ -817,12 +817,17 @@ class Framework():
                 if sum(combined_mask) > 1:
                     first_neg = np.argmax(combined_mask == True)
                     first_neg_date = df['prod_date'][idx:idx+num_days][first_neg]
+                    absolute_minimum_life = prod_start_date + relativedelta(years=1)
+                    if first_neg_date < absolute_minimum_life:
+                        first_neg_date = absolute_minimum_life
                     min_life = min_life_parser(min_life_val, first_neg_date, self.effective_date, self.end_date)
                     if all(min_life.min_life.values != 0):
                         end_of_life = self.effective_date
                     else:
                         end_of_life = min_life.loc[(min_life.min_life.values == 0), 'prod_date'].values[0]
-
+                    print(first_neg_date)
+                    print(end_of_life)
+                    sys.stdout.flush()
                     for k in df.keys():
                         if k in ('scenario', 'idp', 'prod_date', 'budget_type', 'input_gas_price', 'input_oil_price',
                                 'name', 'short_pad', 'pad', 'rig', 'area', 'time_on', 'input_ngl_price', 'wi', 'nri',
@@ -1132,7 +1137,7 @@ class Framework():
             sys.stdout.flush()
             save_output(self)
 
-    def aggregate(self, a, num_trials, subset=None):
+    def aggregate(self, a, num_trials, subset=None, file_path=None, property_id=None):
         start = time.time()
         label = subset
         print('aggregating economics')
@@ -1151,7 +1156,13 @@ class Framework():
                    'year_2_roic': np.zeros(num_trials),
                    'year_2_cf': np.zeros(num_trials),
                    'year_2_fcf': np.zeros(num_trials)}
-        ed = self.econ_dists.copy()
+        if file_path is None:
+            ed = self.econ_dists.copy()
+        else:
+            ed = pd.read_excel(file_path)
+        ed = pd.merge(left=ed, right=self.branch.properties[['propnum', property_id]],
+                        how='inner', left_on=['idp'], right_on=['propnum'])
+        ed.to_csv('test.csv')
         if subset == 'drill':
             ed = ed[ed.drill_cost > 0]
             subset = 'Drill and Complete'
@@ -1162,6 +1173,9 @@ class Framework():
             if isinstance(a, list):
                 ed_drill = ed[ed.drill_cost > 0]
                 ed_duc = ed[ed.drill_cost == 0]
+        if property_id is not None:
+            pass
+
         for t in range(num_trials):
             if not subset:
                 if isinstance(a, list):
