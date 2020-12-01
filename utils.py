@@ -2364,8 +2364,10 @@ def load_probabilities(branch):
                 properties = branch.properties[branch.properties[col] == p].propnum
                 u_p = u[u.property_id == p]
                 for t in u_p.type.unique():
-                        d = prob_dict(u_p[u_p.type == t].value.values[0])
-                        uncertainty.loc[uncertainty.idp.isin(properties), t] = apply_uncertainty(d)
+                    d = prob_dict(u_p[u_p.type == t].value.values[0])
+                    a = apply_uncertainty(d)
+                    uncertainty.loc[uncertainty.idp.isin(properties), t] = a
+
 
         r = df[df.category == 'risk']
         abandon = None
