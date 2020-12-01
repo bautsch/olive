@@ -396,12 +396,12 @@ class Framework():
         else:
             scenario = self.branch.scenario.scenario
 
-        if self.production_only:
-            print('building gross production profile')
-            sys.stdout.flush()
-        else:
-            print('building gross production profile and generating economics')
-            sys.stdout.flush()
+        # if self.production_only:
+        #     print('building gross production profile')
+        #     sys.stdout.flush()
+        # else:
+        #     print('building gross production profile and generating economics')
+        #     sys.stdout.flush()
 
         num_properties = len(property_list)
         num_days = len(self.date_range)
@@ -689,8 +689,8 @@ class Framework():
                                                         df['gross_oil'][idx:idx+num_days]) * df['wi'][idx:idx+num_days]
                 df['var_water_cost'][idx:idx+num_days] = (inputs['cost_varwater'].cost_varwater.values *
                                                           df['gross_water'][idx:idx+num_days]) * df['wi'][idx:idx+num_days]
-                df['gtp'][idx:idx+num_days] = (inputs['cost_gtp'].cost_gtp.values * df['net_gas'][idx:idx+num_days] *
-                                               df['wi'][idx:idx+num_days]) * gtp_mult
+                df['gtp'][idx:idx+num_days] = (inputs['cost_gtp'].cost_gtp.values * df['shrink'][idx:idx+num_days] *
+                                               df['gross_gas'][idx:idx+num_days]) * df['wi'][idx:idx+num_days] * gtp_mult
                 df['tax_rate'][idx:idx+num_days] = (inputs['tax_sev'].tax_sev.values +
                                                     inputs['tax_adval'].tax_adval.values)
 
@@ -919,7 +919,7 @@ class Framework():
 
         if self.mc_pop:
             if not self.mc_monthly:
-                #print('calculating metrics')
+                print('calculating metrics')
                 sys.stdout.flush()
                 econ_dists = {'idp': np.empty(num_properties, dtype='object'),
                             'gas_eur': np.zeros(num_properties),
@@ -987,9 +987,9 @@ class Framework():
                     econ_dists['drill_cost'][n] = df['gross_drill_capex'][df['idp'] == p].sum()
                     econ_dists['compl_cost'][n] = df['gross_compl_capex'][df['idp'] == p].sum()
                     econ_dists['infra_cost'][n] = df['gross_misc_capex'][df['idp'] == p].sum()
-                    econ_dists['avg_gas_price'][n] = df['realized_gas_price'][df['idp'] == p].mean()
-                    econ_dists['avg_oil_price'][n] = df['realized_oil_price'][df['idp'] == p].mean()
-                    econ_dists['avg_ngl_price'][n] = df['realized_ngl_price'][df['idp'] == p].mean()
+                    econ_dists['avg_gas_price'][n] = df['realized_gas_price'][df['idp'] == p) & (df['realized_gas_price'] > 0)].mean()
+                    econ_dists['avg_oil_price'][n] = df['realized_oil_price'][df['idp'] == p) & (df['realized_gas_price'] > 0)].mean()
+                    econ_dists['avg_ngl_price'][n] = df['realized_ngl_price'][df['idp'] == p) & (df['realized_gas_price'] > 0)].mean()
                     if risk_uncertainty[p]['abandon'] is None:
                         econ_dists['irr'][n] = xirr(df['fcf'][df['idp'] == p][start:end])
                     else:
