@@ -808,7 +808,10 @@ class Framework():
 
                 df['cf'][idx:idx+num_days] = (df['net_total_rev'][idx:idx+num_days] - df['loe'][idx:idx+num_days])
                 df['fcf'][idx:idx+num_days] = (df['cf'][idx:idx+num_days] - df['net_total_capex'][idx:idx+num_days])
-                date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date + relativedelta(days=30)))
+                if budget_type == 'wedge':
+                    date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date + relativedelta(years=3)))
+                else:
+                    date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date + relativedelta(years=1)))
                 capex_mask = (df['net_total_capex'][idx:idx+num_days] < 0.01)
                 neg_fcf_mask = (df['fcf'][idx:idx+num_days] < -3.33)
                 combined_mask = np.logical_and(date_mask, capex_mask)
@@ -817,17 +820,11 @@ class Framework():
                 if sum(combined_mask) > 1:
                     first_neg = np.argmax(combined_mask == True)
                     first_neg_date = df['prod_date'][idx:idx+num_days][first_neg]
-                    absolute_minimum_life = prod_start_date + relativedelta(years=1)
-                    if first_neg_date < absolute_minimum_life:
-                        first_neg_date = absolute_minimum_life
                     min_life = min_life_parser(min_life_val, first_neg_date, self.effective_date, self.end_date)
                     if all(min_life.min_life.values != 0):
                         end_of_life = self.effective_date
                     else:
                         end_of_life = min_life.loc[(min_life.min_life.values == 0), 'prod_date'].values[0]
-                    print(first_neg_date)
-                    print(end_of_life)
-                    sys.stdout.flush()
                     for k in df.keys():
                         if k in ('scenario', 'idp', 'prod_date', 'budget_type', 'input_gas_price', 'input_oil_price',
                                 'name', 'short_pad', 'pad', 'rig', 'area', 'time_on', 'input_ngl_price', 'wi', 'nri',

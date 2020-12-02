@@ -157,9 +157,9 @@ class plot():
         else:
             start_date = pd.Timestamp(self.prod_info['fcst_start_date'][0])
             forecast = arps_fit([self.b, self.di, self.ip], self.dmin, self.min_rate)
-        prod_date = pd.date_range(start_date,
-                                  periods=self.idf, freq='D')
-        time_on = time_on = np.arange(1, self.idf)
+        prod_date = pd.date_range(start=start_date, end=self.last_prod_date, freq='D')
+        time_on = np.arange(1, self.idf+1)
+        forecast = forecast[:self.idf]
         return forecast, prod_date, time_on
 
     def build_figure(self):
@@ -592,13 +592,6 @@ def manual_fit(well, fcst_start_date, production, yields_dict,
     forecast_cat = ['forecast'] * (len(forecast) - len(production[:start_idx]))
     prod_cat.extend(forecast_cat)
     fcst_dict['prod_cat'] = prod_cat
-
-    for k, v in fcst_dict.items():
-        print(k, len(v))
-        sys.stdout.flush()
-
-    test = pd.DataFrame(fcst_dict)
-    test.to_csv('test.csv')
 
     return fcst_dict
 
