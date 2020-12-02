@@ -809,7 +809,7 @@ class Framework():
                 df['cf'][idx:idx+num_days] = (df['net_total_rev'][idx:idx+num_days] - df['loe'][idx:idx+num_days])
                 df['fcf'][idx:idx+num_days] = (df['cf'][idx:idx+num_days] - df['net_total_capex'][idx:idx+num_days])
                 if budget_type == 'wedge':
-                    date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date + relativedelta(years=3)))
+                    date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date + relativedelta(years=5)))
                 else:
                     date_mask = (df['prod_date'][idx:idx+num_days] >= np.datetime64(prod_start_date + relativedelta(years=1)))
                 capex_mask = (df['net_total_capex'][idx:idx+num_days] < 0.01)
