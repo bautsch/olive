@@ -829,10 +829,16 @@ class Well_Yields():
 
         if self.oil is not None:
             self.oil = max(p.oil.sum() / p.gas.sum() * 1000, 0)
+            if self.oil > 1000:
+                self.oil = 0.0
         if self.gas is not None:
             self.gas = max(p.gas.sum() / p.oil.sum(), 0)
+            if self.gas > 1000:
+                self.gas = 0.0
         if self.water is not None:
             self.water = max(p.water.sum() / p.gas.sum(), 0)
+            if self.water > 1000:
+                self.water = 0.0
 
         del p
 

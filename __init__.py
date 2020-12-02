@@ -217,7 +217,6 @@ class Tree():
             save_dists_to_sql(self.branches[branch_name])
         else:
             self.branches[branch_name].framework.econ_dists = e
-            e.to_csv('test.csv')
         stop = time.time()
         timer(start, stop)
 

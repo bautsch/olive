@@ -187,11 +187,12 @@ class plot():
                 if self.forecast_type in ('auto', 'manual'):
                     print(self.forecast_type, self.type_curve, 'auto/manual forecast')
                     sys.stdout.flush()
-                    hindcast, back_dates, time_on = self.get_hindcasts(use_tmp=False)
-                    fig.add_trace(go.Scatter(x=back_dates,
-                                             y=hindcast,
-                                             line={'color': 'red',
-                                                   'dash': 'dash'}, opacity=0.5, name='hindcast'))   
+                    if self.prod_info is not None:
+                        hindcast, back_dates, time_on = self.get_hindcasts(use_tmp=False)
+                        fig.add_trace(go.Scatter(x=back_dates,
+                                                y=hindcast,
+                                                line={'color': 'red',
+                                                    'dash': 'dash'}, opacity=0.5, name='hindcast'))   
                 else:
                     print(self.forecast_type, self.type_curve, 'autotype forecast')
                     sys.stdout.flush()
@@ -241,7 +242,7 @@ class plot():
             if self.new_hindcast is not None:
                 fig.add_trace(self.new_hindcast)
 
-            if not all(pd.isnull(forecast.prod_date)):
+            if not all(pd.isnull(forecast.prod_date)) and self.tmp_prod_info is not None:
                 eur = self.tmp_prod_info['eur'][0]
                 textstr = '<br>'.join(('idp: ' + self.idp,
                                     'name: ' + self.well.well_name,

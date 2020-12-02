@@ -1933,7 +1933,7 @@ def update_yields(forecaster, yields):
     start = time.time()
     conn = connect(forecaster.branch.tree.connection_dict)
     eng = engine(forecaster.branch.tree.connection_dict)
-
+    yields.to_csv('test.csv')
     yields.to_sql(name='temp_yields', con=eng,
                   if_exists='replace', method='multi',
                   index=False, chunksize=500)
