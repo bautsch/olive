@@ -2358,6 +2358,8 @@ def load_probabilities(branch):
     if branch.scenario.probability is not None:
         print('initializing probability model')
         df = load_probability_scenario(branch)
+        if len(df) == 0:
+            print('NO PROBABILITY DATA LOADED', branch.scenario.probability)
 
         u = df[df.category == 'uncertainty']
         if len(u) > 0:

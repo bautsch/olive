@@ -205,7 +205,19 @@ class Framework():
         print('initializing price deck')
         gas_check = True
         while gas_check:
-            self.price_deck = load_price_deck(self)
+            load_check = True
+            while load_check:
+                self.price_deck = load_price_deck(self)
+                self.check = load_price_deck(self)
+                if not all(self.price_deck.gas_price == self.check.gas_price):
+                    print('gas load error')
+                elif not all(self.price_deck.oil_price == self.check.oil_price):
+                    print('oil load error')
+                elif not all(self.price_deck.ngl_price == self.check.ngl_price):
+                    print('ngl load error')
+                else:
+                    print('successful price load')
+                    load_check = False
             min_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.min()]
             max_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.max()]
             p = self.price_deck[(self.price_deck.prod_date >= self.effective_date) &
@@ -709,7 +721,7 @@ class Framework():
                                                        & (df['prod_date'] == np.datetime64(drill_start_date))]
 
                     df['gross_misc_capex'][(df['idp'] == p)
-                                           & (df['prod_date'] == np.datetime64(drill_start_date))] = tmp_misc + infra_cost
+                                           & (df['prod_date'] == np.datetime64(drill_start_date))] = tmp_misc * infra_cost
 
                     compl_start_date = self.branch.model[p].schedule.compl_start_date.date()
 
@@ -1138,28 +1150,27 @@ class Framework():
         start = time.time()
         label = subset
         print('aggregating economics')
-        print(a, 'samples per aggregation\t', num_trials, 'trials')
-        results = {'gas_eur': np.zeros(num_trials),
-                   'ip90': np.zeros(num_trials),
-                   'drill_cost': np.zeros(num_trials),
-                   'compl_cost': np.zeros(num_trials),
-                   'infra_cost': np.zeros(num_trials),
-                   'npv': np.zeros(num_trials),
-                   'irr': np.zeros(num_trials),
-                   'payout': np.zeros(num_trials),
-                   'year_1_roic': np.zeros(num_trials),
-                   'year_1_cf': np.zeros(num_trials),
-                   'year_1_fcf': np.zeros(num_trials),
-                   'year_2_roic': np.zeros(num_trials),
-                   'year_2_cf': np.zeros(num_trials),
-                   'year_2_fcf': np.zeros(num_trials)}
         if file_path is None:
             ed = self.econ_dists.copy()
         else:
+            print('loading file')
             ed = pd.read_excel(file_path)
+        print('initializing')
+        n_count = ed.idp.nunique()
+        num_sims = int(len(ed) / n_count)
+        sim = [np.ones(n_count, dtype=np.int8)*i for i in range(1, num_sims+1)]
+        sim = np.concatenate(sim)
+        ed['sim'] = sim
+        print('merging dataframes')
         ed = pd.merge(left=ed, right=self.branch.properties[['propnum', property_id]],
                         how='inner', left_on=['idp'], right_on=['propnum'])
-        ed.to_csv('test.csv')
+        print('unique properties:', n_count)
+        if property_id is not None:
+            pid_count = ed[property_id].nunique()
+            print('unique ' + property_id + ':', pid_count)
+        else:
+            pid_count = 1
+        print('number of economic distribution simulations:', num_sims)
         if subset == 'drill':
             ed = ed[ed.drill_cost > 0]
             subset = 'Drill and Complete'
@@ -1170,22 +1181,53 @@ class Framework():
             if isinstance(a, list):
                 ed_drill = ed[ed.drill_cost > 0]
                 ed_duc = ed[ed.drill_cost == 0]
-        if property_id is not None:
-            pass
-
-        for t in range(num_trials):
-            if not subset:
-                if isinstance(a, list):
-                    idx_list = np.random.choice(ed.index, a[0])
-                    idx_list = np.concatenate([idx_list, np.random.choice(ed.index, a[1])])
+        if property_id is None or property_id in ('idp', 'propnum'):
+            property_id = 'idp'
+        else:
+            ed = ed.groupby(by=[property_id, 'sim'], as_index=False).mean()
+        ed.to_csv('test.csv')
+        print(a, 'samples per aggregation\t', num_trials, 'trials')
+        results = {'property_id': np.empty(num_trials * pid_count, dtype='object'),
+                   'simulation': np.zeros(num_trials * pid_count),
+                   'gas_eur': np.zeros(num_trials * pid_count),
+                   'ip90': np.zeros(num_trials * pid_count),
+                   'drill_cost': np.zeros(num_trials * pid_count),
+                   'compl_cost': np.zeros(num_trials * pid_count),
+                   'infra_cost': np.zeros(num_trials * pid_count),
+                   'npv': np.zeros(num_trials * pid_count),
+                   'irr': np.zeros(num_trials * pid_count),
+                   'payout': np.zeros(num_trials * pid_count),
+                   'year_1_roic': np.zeros(num_trials * pid_count),
+                   'year_1_cf': np.zeros(num_trials * pid_count),
+                   'year_1_fcf': np.zeros(num_trials * pid_count),
+                   'year_2_roic': np.zeros(num_trials * pid_count),
+                   'year_2_cf': np.zeros(num_trials * pid_count),
+                   'year_2_fcf': np.zeros(num_trials * pid_count)}
+        if property_id not in ('idp', 'propnum'):
+            for pid, p in enumerate(ed[property_id].unique()):
+                print('aggregating', p)
+                for t in range(num_trials):
+                    idx_list = np.random.choice(ed[ed[property_id] == p].index, a)
+                    temp_df = ed[ed.index.isin(idx_list)]
+                    for c in temp_df.columns:
+                        if c in results.keys():
+                            results[c][(pid * num_trials) + t] = temp_df[c].mean()
+                    results['property_id'][(pid * num_trials) + t] = p
+                    results['simulation'][(pid * num_trials) + t] = t+1                       
+        else:
+            for t in range(num_trials):
+                if not subset:
+                    if isinstance(a, list):
+                        idx_list = np.random.choice(ed[property_id], a[0])
+                        idx_list = np.concatenate([idx_list, np.random.choice(ed.index, a[1])])
+                    else:
+                        idx_list = np.random.choice(ed.index, a)
                 else:
                     idx_list = np.random.choice(ed.index, a)
-            else:
-                idx_list = np.random.choice(ed.index, a)
-            temp_df = ed[ed.index.isin(idx_list)]
-            for c in temp_df.columns:
-                if c in results.keys():
-                    results[c][t] = temp_df[c].mean()
+                temp_df = ed[ed.index.isin(idx_list)]
+                for c in temp_df.columns:
+                    if c in results.keys():
+                        results[c][t] = temp_df[c].mean()
         if subset:
             self.aggregations[subset] = pd.DataFrame(results)
         else:
