@@ -2332,12 +2332,13 @@ def load_probabilities(branch):
         'doe': [1.0] * num_prop,
         'gtp': [1.0] * num_prop,
         'total_capex': [1.0] * num_prop,
-        'infra_cost': [0.0] * num_prop
+        'infra_cost': [1.0] * num_prop
     }
     uncertainty = pd.DataFrame(uncertainty)
 
     risk = {
         'idp': branch.properties.propnum.values,
+        'drill_time': [1.0] * num_prop,
         'performance': [None] * num_prop,
         'profile': [1.0] * num_prop,
         'curtailment': [None] * num_prop,
@@ -2359,7 +2360,17 @@ def load_probabilities(branch):
         print('initializing probability model')
         df = load_probability_scenario(branch)
         if len(df) == 0:
-            print('NO PROBABILITY DATA LOADED', branch.scenario.probability)
+            do_not_proceed = True
+            while do_not_proceed is True:
+                print('NO PROBABILITY DATA LOADED FOR \'' + branch.scenario.probability + '\'')
+                cmd = input('proceed with run? (y/n): ')
+                if cmd not in ('yes', 'no', 'YES', 'NO', 'y', 'n', 'Y', 'N'):
+                    print('invalid command')
+                else:
+                    if cmd in ('no', 'NO', 'n', 'N'):
+                        return
+                    else:
+                        do_not_proceed = False
 
         u = df[df.category == 'uncertainty']
         if len(u) > 0:
