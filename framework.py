@@ -399,6 +399,7 @@ class Framework():
             sys.stdout.flush()
             return self.populate(property_list)
 
+    # @profile
     def populate(self, property_list):
         sys.stdout.flush()
         start = time.time()
@@ -705,8 +706,7 @@ class Framework():
                                                df['gross_gas'][idx:idx+num_days]) * df['wi'][idx:idx+num_days] * gtp_mult
                 df['tax_rate'][idx:idx+num_days] = (inputs['tax_sev'].tax_sev.values +
                                                     inputs['tax_adval'].tax_adval.values)
-
-                df['gross_misc_capex'][idx:idx+num_days] = inputs['inv_g_misc'].inv_g_misc.values
+                df['gross_misc_capex'][idx:idx+num_days] = inputs['inv_g_misc'].inv_g_misc.values * infra_cost
 
                 if budget_type == 'wedge':
 
@@ -717,11 +717,11 @@ class Framework():
                                             (df['prod_date'] >= np.datetime64(drill_start_date)) &
                                             (df['prod_date'] <= np.datetime64(drill_end_date))] = alloc_drill_capex
 
-                    tmp_misc = df['gross_misc_capex'][(df['idp'] == p)
-                                                       & (df['prod_date'] == np.datetime64(drill_start_date))]
+                    # tmp_misc = df['gross_misc_capex'][(df['idp'] == p)
+                    #                                    & (df['prod_date'] == np.datetime64(drill_start_date))]
 
-                    df['gross_misc_capex'][(df['idp'] == p)
-                                           & (df['prod_date'] == np.datetime64(drill_start_date))] = tmp_misc * infra_cost
+                    # df['gross_misc_capex'][(df['idp'] == p)
+                    #                        & (df['prod_date'] == np.datetime64(drill_start_date))] = tmp_misc
 
                     compl_start_date = self.branch.model[p].schedule.compl_start_date.date()
 
