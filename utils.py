@@ -2031,52 +2031,69 @@ def apply_risk(d):
 
 def apply_curtailment(m, f):
     profile = f * m
-    p = np.nonzero(f)[0][0]
-    t = int(5514.8*np.exp(-3.978*m))
-    v1 = profile[p+45]
-    v2 = f[p+t]
-    delta = (v2 - v1) / (t - 45)
-    fill = np.arange(1, t-44) * delta + v1
-    profile[p+45:p+t] = fill
-    profile[p+t:] = f[p+t:]
-    q1 = sum(f)
-    q2 = sum(profile)
-    delta_q = (q1 - q2) / 18160
-    profile[p+90:] = profile[p+90:] + delta_q
-    return profile
+    idx = np.nonzero(f)[0]
+    if len(idx) == 0:
+        return profile
+    else:
+        p = idx[0]
+        t = int(5514.8*np.exp(-3.978*m))
+        if p+45 > len(profile) or p+t > len(f):
+            return profile
+        else:
+            v1 = profile[p+45]
+            v2 = f[p+t]
+            delta = (v2 - v1) / (t - 45)
+            fill = np.arange(1, t-44) * delta + v1
+            profile[p+45:p+t] = fill
+            profile[p+t:] = f[p+t:]
+            q1 = sum(f)
+            q2 = sum(profile)
+            delta_q = (q1 - q2) / 18160
+            profile[p+90:] = profile[p+90:] + delta_q
+            return profile
 
 def apply_ip_adjust(m, f):
     profile = f * m
-    p = np.nonzero(f)[0][0]
-    if m <= 1.0:
-        x = np.linspace(0.1, 1, 19)
-        y = [13904, 7966, 5285, 3832, 2919,
-             2299, 1853, 1519, 1260, 1055,
-             887, 752, 635, 533, 445,
-             365, 293, 212, 0]
-        t = int(np.interp(m, x, y))
-        v1 = profile[p+90]
-        v2 = f[p+t]
-        delta = (v2 - v1) / (t - 90)
-        fill = np.arange(1, t-89) * delta + v1
-        profile[p+90:p+t] = fill
-        profile[p+t:] = f[p+t:]
-        q1 = sum(f)
-        q2 = sum(profile)
-        delta_q = (q1 - q2) / 18160
-        profile[p+90:] = profile[p+90:] + delta_q
+    idx = np.nonzero(f)[0]
+    if len(idx) == 0:
         return profile
     else:
-        v1 = profile[p+90]
-        v2 = profile[p+120]
-        delta = (v2 - v1) / 30
-        fill = np.arange(1, 31) * delta + v1
-        q1 = sum(f[p:p+120])
-        q2 = sum(profile[p:p+120])
-        delta_q = (q1 - q2) / 18160
-        profile[p+90:p+120] = fill
-        profile[p+120:] = profile[p+120:] + delta_q
-        return profile
+        p = idx[0]
+        if m <= 1.0:
+            x = np.linspace(0.1, 1, 19)
+            y = [13904, 7966, 5285, 3832, 2919,
+                2299, 1853, 1519, 1260, 1055,
+                887, 752, 635, 533, 445,
+                365, 293, 212, 0]
+            t = int(np.interp(m, x, y))
+            if p+90 > len(profile) or p+t > len(f):
+                return profile
+            else:
+                v1 = profile[p+90]
+                v2 = f[p+t]
+                delta = (v2 - v1) / (t - 90)
+                fill = np.arange(1, t-89) * delta + v1
+                profile[p+90:p+t] = fill
+                profile[p+t:] = f[p+t:]
+                q1 = sum(f)
+                q2 = sum(profile)
+                delta_q = (q1 - q2) / 18160
+                profile[p+90:] = profile[p+90:] + delta_q
+                return profile
+        else:
+            if p+90 > len(profile) or p+t > len(f):
+                return profile
+            else:        
+                v1 = profile[p+90]
+                v2 = profile[p+120]
+                delta = (v2 - v1) / 30
+                fill = np.arange(1, 31) * delta + v1
+                q1 = sum(f[p:p+120])
+                q2 = sum(profile[p:p+120])
+                delta_q = (q1 - q2) / 18160
+                profile[p+90:p+120] = fill
+                profile[p+120:] = profile[p+120:] + delta_q
+                return profile
 
 def build_agg_plot(branch, df, label):
     plt.figure(figsize=(5, 6))

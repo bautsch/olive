@@ -52,18 +52,15 @@ class Schedule():
         self.show_gantt = show_gantt
         
         self.build_dictionaries()
+        self.load_schedule_inputs()
 
-        if self.branch.probability:
-            if self.branch.framework is None:
-                self.risk, self.uncertainty = load_probabilities(self.branch)
-            else:
-                self.risk = None
-                self.uncertainty = None
+        if self.branch.probability and self.branch.framework is None:
+            self.risk, self.uncertainty = load_probabilities(self.branch)
+            self.apply_probability()
         else:
             self.risk = None
             self.uncertainty = None
 
-        self.load_schedule_inputs()
         self.calc_dates()
         self.gantt_chart()
         self.save_schedule()
@@ -234,6 +231,11 @@ class Schedule():
                 self.pad_dict[pad].compl_finish = pd.Timestamp(s.compl_end_date.values[0])
             if not pd.isnull(s.prod_start_date.values[0]):
                 self.pad_dict[pad].prod_start = pd.Timestamp(s.prod_start_date.values[0])                 
+
+    def apply_probability(self):
+        for w in self.well_dict.keys():
+            u = self.uncertainty.loc[self.uncertainty.idp == w]
+            r = self.risk.loc[self.risk.idp == w]
 
     def calc_dates(self):
         print('calculating drill dates')

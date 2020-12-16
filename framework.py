@@ -218,8 +218,14 @@ class Framework():
                 else:
                     print('successful price load')
                     load_check = False
+
             min_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.min()]
             max_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.max()]
+            if max_prices.gas_price.values[0] > 4:
+                print('max gas price failed verification, reloading')
+                gas_check = True
+                continue
+
             p = self.price_deck[(self.price_deck.prod_date >= self.effective_date) &
                                 (self.price_deck.prod_date <= self.end_date)]
 
@@ -260,7 +266,7 @@ class Framework():
                             'input_ngl_price'] = max_prices.ngl_price.values[0]
             self.price_deck = temp_price_df
             if any(self.price_deck.input_gas_price > 5):
-                print('gas price failed verification reloading')
+                print('gas price failed verification, reloading')
             else:
                 print('price deck verification succeeded')
                 gas_check = False
@@ -308,7 +314,7 @@ class Framework():
                     results.append(self.run_populate())
                 else:
                     df = self.run_populate()
-                    df = df.groupby(by=['scenario', 'prod_date'], as_index=False)['fcf'].sum()
+                    df = df.groupby(by=['scenario', 'prod_date'], as_index=False).sum()
                     df['simulation'] = sim + 1
                     results.append(df)
                 stop = time.time()
@@ -319,6 +325,7 @@ class Framework():
         timer(start, stop)
         if self.mc_monthly:
             results = pd.concat(results)
+            results.to_csv('cf_mc.csv')
         self.econ_dists = results
         return
 
@@ -330,14 +337,23 @@ class Framework():
             print('simulation', sim + 1, 'of', num_simulations)
             sys.stdout.flush()
             if sim != 0:
-                    self.risk, self.uncertainty = load_probabilities(self.branch)
-            results.append(self.prepopulate(property_list))
-        for i, sim in enumerate(results):
-            if i == 0:
-                continue
-            for k in sim.keys():
-                results[0][k] = np.concatenate([results[0][k], sim[k]])
-        return results[0]
+                self.risk, self.uncertainty = load_probabilities(self.branch)
+            if not self.mc_monthly:
+                results.append(self.prepopulate(property_list))
+            else:
+                df = self.prepopulate(property_list)
+                df['simulation'] = sim + 1
+                results.append(df)
+        if not self.mc_monthly:
+            for i, sim in enumerate(results):
+                if i == 0:
+                    continue
+                for k in sim.keys():
+                    results[0][k] = np.concatenate([results[0][k], sim[k]])
+            return results[0]
+        else:
+            return pd.concat(results)
+
 
     def run_populate(self):
         if not self.mc_pop:
@@ -1070,7 +1086,7 @@ class Framework():
                     day = calendar.monthrange(d.year, d.month)[1]
                     eomonth.append(datetime(d.year, d.month, day))
                 df.loc[:, 'prod_date'] = pd.to_datetime(pd.Series(eomonth))
-                df = df.groupby(by=['scenario', 'prod_date'], as_index=False)['fcf'].sum()
+                df = df.groupby(by=['scenario', 'prod_date'], as_index=False).sum()
                 return df
 
     def save_output_to_sql(self, df):
@@ -1162,8 +1178,12 @@ class Framework():
         sim = np.concatenate(sim)
         ed['sim'] = sim
         print('merging dataframes')
-        ed = pd.merge(left=ed, right=self.branch.properties[['propnum', property_id]],
-                        how='inner', left_on=['idp'], right_on=['propnum'])
+        if property_id is not None:
+            ed = pd.merge(left=ed, right=self.branch.properties[['propnum', property_id]],
+                            how='inner', left_on=['idp'], right_on=['propnum'])
+        else:
+            ed = pd.merge(left=ed, right=self.branch.properties['propnum'],
+                how='inner', left_on=['idp'], right_on=['propnum'])
         print('unique properties:', n_count)
         if property_id is not None:
             pid_count = ed[property_id].nunique()
