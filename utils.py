@@ -631,11 +631,11 @@ def save_pad_schedule(schedule):
     # cursor.close()
     for k, rig in schedule.rig_dict.items():
         for idxp, pad in enumerate(rig.pad_list):
-            schedule.schedule_df.loc[schedule.schedule_df.pad == pad.pad_name, 'drill_start_date'] = pad.drill_start
-            schedule.schedule_df.loc[schedule.schedule_df.pad == pad.pad_name, 'drill_end_date'] = pad.drill_finish
-            schedule.schedule_df.loc[schedule.schedule_df.pad == pad.pad_name, 'compl_start_date'] = pad.compl_start
-            schedule.schedule_df.loc[schedule.schedule_df.pad == pad.pad_name, 'compl_end_date'] = pad.compl_finish
-            schedule.schedule_df.loc[schedule.schedule_df.pad == pad.pad_name, 'prod_start_date'] = pad.prod_start
+            schedule.schedule_df.loc[schedule.schedule_df['pad'] == pad.pad_name, 'drill_start_date'] = pad.drill_start
+            schedule.schedule_df.loc[schedule.schedule_df['pad'] == pad.pad_name, 'drill_end_date'] = pad.drill_finish
+            schedule.schedule_df.loc[schedule.schedule_df['pad'] == pad.pad_name, 'compl_start_date'] = pad.compl_start
+            schedule.schedule_df.loc[schedule.schedule_df['pad'] == pad.pad_name, 'compl_end_date'] = pad.compl_finish
+            schedule.schedule_df.loc[schedule.schedule_df['pad'] == pad.pad_name, 'prod_start_date'] = pad.prod_start
     schedule.schedule_df['run_date'] = pd.Timestamp(schedule.branch.tree.run_time)
     schedule.schedule_df['scenario'] = schedule.name
     schedule.schedule_df['simulation'] = schedule.simulation
