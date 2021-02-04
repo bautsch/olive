@@ -5,19 +5,23 @@ from dateutil.relativedelta import relativedelta
 import pandas as pd
 import numpy as np
 import pickle
+import sys
 pd.options.display.float_format = '{:,.2f}'.format
 
 
 class Schedule():
     def __init__(self, branch, schedule_file_path, gantt_start_date='1/1/2019',
-                 gantt_years=3, show_gantt=True):
+                 gantt_years=3, show_gantt=True, simulation=0):
         print('initializing schedule')
+        sys.stdout.flush()
         self.branch = branch
         if branch.scenario.schedule is None:
             print('no schedule scenario provided')
+            sys.stdout.flush()
             return
         if branch.scenario.schedule_inputs is None:
             print('no schedule inputs scenario provided')
+            sys.stdout.flush()
             return
         self.name = branch.scenario.schedule
         self.schedule_path = schedule_file_path
@@ -45,20 +49,24 @@ class Schedule():
                                          )
         self.schedule_dates = pd.DataFrame(columns=['scenario', 'idp', 'drill_start_date',
                                                     'drill_end_date', 'compl_start_date',
-                                                    'compl_end_date', 'prod_start_date'])
+                                                    'compl_end_date', 'prod_start_date', 'simulation', 'run_date'])
 
         self.gantt_start_date = pd.Timestamp(gantt_start_date)
         self.gantt_end_date = gantt_start_date + relativedelta(years=+gantt_years)
         self.show_gantt = show_gantt
+        self.simulation = simulation
         
         self.build_dictionaries()
         self.load_schedule_inputs()
 
-        if self.branch.probability and self.branch.framework is None:
-            self.risk, self.uncertainty = load_probabilities(self.branch)
-            self.apply_probability()
+        if self.branch.probability:
+            if self.branch.framework is None:
+                self.risk, self.uncertainty = load_probabilities(self.branch)
+            else:
+                self.risk = self.branch.framework.risk
+                self.uncertainty = self.branch.framework.uncertainty
         else:
-            self.risk = None
+            self.risk = self.branch.framework
             self.uncertainty = None
 
         self.calc_dates()
@@ -69,7 +77,7 @@ class Schedule():
         return self.name
 
     def build_dictionaries(self):
-        print('building rig and pad dictionaries')
+        # print('building rig and pad dictionaries')
         self.rig_dict = {}
         self.pad_dict = {}
         self.well_dict = {}
@@ -100,9 +108,10 @@ class Schedule():
                                                 row['input_group'],
                                                 row['pod_size'])
                 self.rig_dict[row['rig']].add_pad(self.pad_dict[row['pad']])
-        print('loading properties')
+        # print('loading properties')
         if self.branch.scenario.properties is None:
             print('no properties scenario provided')
+            sys.stdout.flush()
             return
         self.properties = load_schedule_properties(self)
         self.properties.sort_values(by=['pad', 'schedule_order'], inplace=True)
@@ -110,7 +119,7 @@ class Schedule():
             self.branch.properties = self.properties
         else:
             self.branch.properties = pd.concat([self.branch.properties, self.properties])
-        print('building well dictionary')
+        # print('building well dictionary')
         for _, row in self.properties.iterrows():
             self.well_dict[row['propnum']] = Well_Sched(schedule=self,
                                                         idp=row['propnum'],
@@ -124,7 +133,7 @@ class Schedule():
             if row['propnum'] in self.branch.model.keys():
                 self.branch.model[row['propnum']].schedule = self.well_dict[row['propnum']]
                 self.branch.model[row['propnum']].well_name = row['bolo_well_name']
-                self.branch.model[row['propnum']].pad = rpw['pad']
+                self.branch.model[row['propnum']].pad = row['pad']
                 self.branch.model[row['propnum']].short_pad = row['short_pad']
                 self.branch.model[row['propnum']].area = row['prospect']
             else:
@@ -148,7 +157,7 @@ class Schedule():
         self.schedule_dates['idp'] = pd.Series(list(self.well_dict.keys()))
 
     def load_schedule_inputs(self):
-        print('loading schedule inputs')
+        # print('loading schedule inputs')
         self.schedule_inputs = load_schedule_inputs(self.branch)
         for pad in self.pad_dict.keys():
             s = self.schedule_inputs
@@ -232,30 +241,27 @@ class Schedule():
             if not pd.isnull(s.prod_start_date.values[0]):
                 self.pad_dict[pad].prod_start = pd.Timestamp(s.prod_start_date.values[0])                 
 
-    def apply_probability(self):
-        for w in self.well_dict.keys():
-            u = self.uncertainty.loc[self.uncertainty.idp == w]
-            r = self.risk.loc[self.risk.idp == w]
-
     def calc_dates(self):
-        print('calculating drill dates')
+        # print('calculating drill dates')
         calc_drill_dates(self)
-        print('calculating completion dates')
+        # print('calculating completion dates')
         calc_compl_dates(self)
-        print('calculating start dates')
+        # print('calculating start dates')
         calc_start_dates(self)
-        print('saving schedule')
+        self.schedule_dates['simulation'] = self.simulation
+        self.schedule_dates['run_date'] = pd.Timestamp(self.branch.tree.run_time)
+        # print('saving schedule')
         save_schedule(self)
         save_pad_schedule(self)
 
     def gantt_chart(self):
-        print('creating gantt chart')
+        # print('creating gantt chart')
         create_gantt_df(self)
         create_gantt_chart(self, 'main')
         create_gantt_chart(self, 'archive')
 
     def save_schedule(self):
-        print('saving schedule pickle')
+        # print('saving schedule pickle')
 
         pkl_name = str(self.branch.tree.name + 
                        '\\archive\\' + self.name +
@@ -360,6 +366,7 @@ class Pad():
         self.compl_finish = None
         self.prod_start = None
         self.prod_finish = None
+        self.time_shift = 0
 
     def __repr__(self):
         print_dict = self.__dict__.copy()

@@ -298,6 +298,17 @@ class Framework():
                 chunks.append([self.num_simulations - chunk_size * num_processes, property_list])
             if chunk_size * num_processes > self.num_simulations:
                 chunks[-1][0] = chunks[-1][0] - chunk_size * num_processes - self.num_simulations
+            tmp_chunks = []
+            for idc, c in enumerate(chunks):
+                if idc == 0:
+                    prev = c[0]
+                    start = 0
+                else:
+                    prev = chunks[idc - 1][0]
+                    start = start + prev
+                tmp_chunks.append([c[0], c[1], start])
+                sys.stdout.flush()
+            chunks = tmp_chunks
             pool = mp.Pool(processes=len(chunks))
             results = pool.map(self.run_simulations_mc, chunks)
         elif num_processes > 4:
@@ -310,6 +321,12 @@ class Framework():
                 sys.stdout.flush()
                 if sim != 0:
                      self.risk, self.uncertainty = load_probabilities(self.branch)
+                self.branch.build_schedule(self.branch.schedule_file_path,
+                                           self.branch.gantt_start_date,
+                                           self.branch.gantt_years,
+                                           self.branch.show_gantt,
+                                           self.branch.verbose,
+                                           sim+1)
                 if not self.mc_monthly:
                     results.append(self.run_populate())
                 else:
@@ -334,10 +351,16 @@ class Framework():
         property_list = chunk[1]
         results = []
         for sim in range(num_simulations):
-            print('simulation', sim + 1, 'of', num_simulations)
+            print('simulation', sim + 1, 'of', num_simulations, 'in chunk', chunk[2])
             sys.stdout.flush()
             if sim != 0:
                 self.risk, self.uncertainty = load_probabilities(self.branch)
+            self.branch.build_schedule(self.branch.schedule_file_path,
+                                       self.branch.gantt_start_date,
+                                       self.branch.gantt_years,
+                                       self.branch.show_gantt,
+                                       self.branch.verbose,
+                                       sim + 1 + chunk[2])
             if not self.mc_monthly:
                 results.append(self.prepopulate(property_list))
             else:

@@ -423,9 +423,19 @@ def calc_drill_dates(schedule):
                 pad.drill_start = prior_pad.drill_finish + timedelta(prior_pad.mob_out) + timedelta(pad.mob_in)
             if pad.drill_finish is None:
                 for idxw, well in enumerate(pad.well_list):
+                    idp = well.idp
+                    if schedule.uncertainty is not None:
+                        u = schedule.uncertainty.loc[schedule.uncertainty.idp == idp].drill_time.values[0]
+                    else:
+                        u = 1
+                    if schedule.risk is not None:
+                        r = schedule.risk.loc[schedule.risk.idp == idp].drill_time.values[0]
+                    else:
+                        r = 1
                     if idxw == 0:
                         well.drill_start_date = pad.drill_start
-                        well.drill_end_date = well.drill_start_date + timedelta(well.drill_time)
+                        well.drill_end_date = well.drill_start_date + timedelta(well.drill_time * u * r)
+                        well.drill_time = well.drill_time * u * r
                         schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
                                            'drill_start_date'] = well.drill_start_date
                         schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
@@ -433,7 +443,8 @@ def calc_drill_dates(schedule):
                     elif idxw == len(pad.well_list) - 1:
                         prior_well = pad.well_list[idxw-1]
                         well.drill_start_date = prior_well.drill_end_date
-                        well.drill_end_date = well.drill_start_date + timedelta(well.drill_time)
+                        well.drill_end_date = well.drill_start_date + timedelta(well.drill_time * u * r)
+                        well.drill_time = well.drill_time * u * r
                         pad.drill_finish = well.drill_end_date
                         schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
                                            'drill_start_date'] = well.drill_start_date
@@ -442,7 +453,8 @@ def calc_drill_dates(schedule):
                     else:
                         prior_well = pad.well_list[idxw - 1]
                         well.drill_start_date = prior_well.drill_end_date
-                        well.drill_end_date = well.drill_start_date + timedelta(well.drill_time)
+                        well.drill_end_date = well.drill_start_date + timedelta(well.drill_time * u * r)
+                        well.drill_time = well.drill_time * u * r
                         schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
                                            'drill_start_date'] = well.drill_start_date
                         schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
@@ -450,9 +462,30 @@ def calc_drill_dates(schedule):
             else:
                 drill_time = (pad.drill_finish - pad.drill_start).days / pad.num_wells
                 for idxw, well in enumerate(pad.well_list):
+                    idp = well.idp
+                    if schedule.uncertainty is not None:
+                        u = schedule.uncertainty.loc[schedule.uncertainty.idp == idp].drill_time.values[0]
+                    else:
+                        u = 1
+                    if schedule.risk is not None:
+                        r = schedule.risk.loc[schedule.risk.idp == idp].drill_time.values[0]
+                    else:
+                        r = 1
                     if idxw == 0:
+                        if idxp == 0:
+                            next_pad = rig.pad_list[idxp + 1]
+                            if next_pad.drill_start is not None:
+                                pad_timing_delta = (next_pad.drill_start - pad.drill_finish).days
+                        if idxp > 0:
+                            prior_pad = rig.pad_list[idxp - 1]
+                            pad.drill_start = prior_pad.drill_finish + timedelta(pad_timing_delta)
+                            if idxp < len(rig.pad_list) - 1:
+                                next_pad = rig.pad_list[idxp + 1]
+                                if next_pad.drill_start is not None:
+                                    pad_timing_delta = (next_pad.drill_start - pad.drill_finish).days
                         well.drill_start_date = pad.drill_start
-                        well.drill_end_date = well.drill_start_date + timedelta(drill_time)
+                        well.drill_end_date = well.drill_start_date + timedelta(drill_time * u * r)
+                        well.drill_time = drill_time * u * r
                         schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
                                            'drill_start_date'] = well.drill_start_date
                         schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
@@ -460,11 +493,16 @@ def calc_drill_dates(schedule):
                     else:
                         prior_well = pad.well_list[idxw - 1]
                         well.drill_start_date = prior_well.drill_end_date
-                        well.drill_end_date = well.drill_start_date + timedelta(drill_time)
+                        well.drill_end_date = well.drill_start_date + timedelta(drill_time * u * r)
+                        well.drill_time = drill_time * u * r
                         schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
                                            'drill_start_date'] = well.drill_start_date
                         schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
                                            'drill_end_date'] = well.drill_end_date
+                    if idxw == len(pad.well_list) - 1:
+                        time_shift = (well.drill_end_date - pad.drill_finish).days
+                        pad.time_shift = time_shift
+                        pad.drill_finish = well.drill_end_date
 
 def calc_compl_dates(schedule):
     schedule.schedule_dates.compl_start_date = pd.to_datetime(schedule.schedule_dates.compl_start_date)
@@ -472,8 +510,8 @@ def calc_compl_dates(schedule):
     for k, rig in schedule.rig_dict.items():
         for idxp, pad in enumerate(rig.pad_list):
             if pad.compl_start is None:
-                pad.compl_start = pad.drill_finish + timedelta(pad.mob_out) + timedelta(pad.log_pad) + timedelta(pad.build_facilities)
-                #last_compl_date = schedule.schedule_dates.compl_end_date.max()
+                pad.compl_start = (pad.drill_finish + timedelta(pad.mob_out)
+                                   + timedelta(pad.log_pad) + timedelta(pad.build_facilities) + timedelta(pad.time_shift))
                 prior_pad = rig.pad_list[idxp - 1]
                 last_compl_date = prior_pad.compl_finish
                 if last_compl_date:
@@ -482,7 +520,7 @@ def calc_compl_dates(schedule):
             if pad.compl_finish is None:
                 for idxw, well in enumerate(pad.well_list):
                     if idxw == 0:
-                        well.compl_start_date = pad.compl_start
+                        well.compl_start_date = pad.compl_start + timedelta(pad.time_shift)
                         well.compl_end_date = well.compl_start_date + timedelta(well.compl_time)
                         schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
                                            'compl_start_date'] = well.compl_start_date
@@ -506,6 +544,8 @@ def calc_compl_dates(schedule):
                         schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
                                            'compl_end_date'] = well.compl_end_date
             else:
+                pad.compl_start = pad.compl_start + timedelta(pad.time_shift)
+                pad.compl_finish = pad.compl_finish + timedelta(pad.time_shift)
                 compl_time = (pad.compl_finish - pad.compl_start).days / pad.num_wells
                 for idxw, well in enumerate(pad.well_list):
                     if idxw == 0:
@@ -556,6 +596,8 @@ def calc_start_dates(schedule):
                     well.prod_start_date = pod_start_dates[pod_idx]
                     schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
                                                 'prod_start_date'] = well.prod_start_date
+                    if idxw == 0:
+                       pad.prod_start = pd.Timestamp(well.prod_start_date)
             else:
                 if pad.prod_finish is None:
                     pad.prod_finish = pad.prod_start + timedelta(3)
@@ -563,6 +605,8 @@ def calc_start_dates(schedule):
                     well.prod_start_date = pad.prod_start
                     schedule.schedule_dates.loc[schedule.schedule_dates.idp == well.idp,
                                                 'prod_start_date'] = well.prod_start_date
+                    if idxw == 0:
+                        pad.prod_start = pd.Timestamp(well.prod_start_date)
 
 def save_schedule(schedule):
     conn = connect(schedule.branch.tree.connection_dict)
@@ -578,16 +622,23 @@ def save_schedule(schedule):
                                   index=False, chunksize=500)
 
 def save_pad_schedule(schedule):
-    conn = connect(schedule.branch.tree.connection_dict)
     eng = engine(schedule.branch.tree.connection_dict)
-    cursor = conn.cursor()
-    query = str('delete from schedule_pads '
-                'where scenario = \'' + schedule.name + '\'')
-    cursor.execute(query)
-    conn.commit()
-    cursor.close()
+    # cursor = conn.cursor()
+    # query = str('delete from schedule_pads '
+    #             'where scenario = \'' + schedule.name + '\'')
+    # cursor.execute(query)
+    # conn.commit()
+    # cursor.close()
+    for k, rig in schedule.rig_dict.items():
+        for idxp, pad in enumerate(rig.pad_list):
+            schedule.schedule_df.loc[schedule.schedule_df.pad == pad.pad_name, 'drill_start_date'] = pad.drill_start
+            schedule.schedule_df.loc[schedule.schedule_df.pad == pad.pad_name, 'drill_end_date'] = pad.drill_finish
+            schedule.schedule_df.loc[schedule.schedule_df.pad == pad.pad_name, 'compl_start_date'] = pad.compl_start
+            schedule.schedule_df.loc[schedule.schedule_df.pad == pad.pad_name, 'compl_end_date'] = pad.compl_finish
+            schedule.schedule_df.loc[schedule.schedule_df.pad == pad.pad_name, 'prod_start_date'] = pad.prod_start
     schedule.schedule_df['run_date'] = pd.Timestamp(schedule.branch.tree.run_time)
     schedule.schedule_df['scenario'] = schedule.name
+    schedule.schedule_df['simulation'] = schedule.simulation
     schedule.schedule_df.to_sql(name='schedule_pads', con=eng,
                                 if_exists='append', method='multi',
                                 index=False, chunksize=500)
