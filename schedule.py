@@ -118,7 +118,9 @@ class Schedule():
         if self.branch.properties is None:
             self.branch.properties = self.properties
         else:
-            self.branch.properties = pd.concat([self.branch.properties, self.properties])
+            tmp_df = pd.concat([self.branch.properties, self.properties])
+            tmp_df = tmp_df.drop_duplicates().reset_index(drop=True)
+            self.branch.properties = tmp_df
         # print('building well dictionary')
         for _, row in self.properties.iterrows():
             self.well_dict[row['propnum']] = Well_Sched(schedule=self,

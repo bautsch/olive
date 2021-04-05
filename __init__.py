@@ -338,7 +338,7 @@ class Branch():
 
     def build_schedule(self, schedule_file_path, gantt_start_date=date(2019, 1, 1),
                        gantt_years=3, show_gantt=True, verbose=False, simulation=0):
-        print('\nbuilding schedule')
+        # print('\nbuilding schedule')
         self.schedule_file_path = schedule_file_path
         self.gantt_start_date = gantt_start_date
         self.gantt_years = gantt_years

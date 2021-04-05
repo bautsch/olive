@@ -1384,7 +1384,7 @@ def save_dists_to_excel(branch, file_path):
     try:
         if file_path == 'main':
             file_path = str(branch.tree.name + '\\' + branch.scenario.scenario +
-                            '_econ_distributions.xlsx')
+                            '_probability_distributions.xlsx')
             writer = pd.ExcelWriter(file_path, engine='xlsxwriter')
             branch.framework.econ_dists.to_excel(writer, sheet_name=name, index=False)
             writer.save()
@@ -1392,7 +1392,7 @@ def save_dists_to_excel(branch, file_path):
         print('file is open and cannot be overwritten, use the archive copy')
     if file_path == 'archive':
         file_path = str(branch.tree.name + '\\archive\\' + branch.scenario.scenario +
-                        '_econ_distributions_' + branch.tree.run_time + '.xlsx')
+                        '_probability_distributions_' + branch.tree.run_time + '.xlsx')
         writer = pd.ExcelWriter(file_path, engine='xlsxwriter')
         branch.framework.econ_dists.to_excel(writer, sheet_name=name, index=False)
         writer.save()    
@@ -1400,15 +1400,15 @@ def save_dists_to_excel(branch, file_path):
 def save_dists_to_sql(branch):
     conn = connect(branch.tree.connection_dict)
     eng = engine(branch.tree.connection_dict)
-    cursor = conn.cursor()
-    query = str('delete from econ_distributions '
-                'where scenario = \'' + branch.name + '\'')
-    cursor.execute(query)
-    conn.commit()
-    cursor.close()
+    # cursor = conn.cursor()
+    # query = str('delete from probability_distributions '
+    #             'where scenario = \'' + branch.name + '\'')
+    # cursor.execute(query)
+    # conn.commit()
+    # cursor.close()
     branch.framework.econ_dists['run_date'] = pd.Timestamp(branch.tree.run_time)
     branch.framework.econ_dists['scenario'] = branch.name
-    branch.framework.econ_dists.to_sql(name='econ_distributions', con=eng,
+    branch.framework.econ_dists.to_sql(name='probability_distributions', con=eng,
                                        if_exists='append', method='multi',
                                        index=False, chunksize=500)
 
@@ -1417,10 +1417,10 @@ def save_aggregation_to_sql(branch, subset, label):
     eng = engine(branch.tree.connection_dict)
     cursor = conn.cursor()
     if label:
-        query = str('delete from econ_aggregations '
+        query = str('delete from probability_aggregations '
                     'where scenario = \'' + branch.name + '_' + label + '\'')
     else:
-        query = str('delete from econ_aggregations '
+        query = str('delete from probability_aggregations '
                     'where scenario = \'' + branch.name + '\'')        
     cursor.execute(query)
     conn.commit()
@@ -1431,7 +1431,7 @@ def save_aggregation_to_sql(branch, subset, label):
         temp = pd.DataFrame(branch.framework.aggregations['All'])
     temp['run_date'] = pd.Timestamp(branch.tree.run_time)
     temp['scenario'] = branch.name
-    temp.to_sql(name='econ_aggregations', con=eng,
+    temp.to_sql(name='probability_aggregations', con=eng,
                 if_exists='append', method='multi',
                 index=False, chunksize=500)
 
@@ -1441,10 +1441,10 @@ def save_aggregation_to_excel(branch, file_path, subset):
         if file_path == 'main':
             if subset:
                 file_path = str(branch.tree.name + '\\' + branch.scenario.scenario +
-                                '_econ_aggregation_' + subset + '.xlsx')
+                                '_probability_aggregations_' + subset + '.xlsx')
             else:
                 file_path = str(branch.tree.name + '\\' + branch.scenario.scenario +
-                                '_econ_aggregation.xlsx')
+                                '_probability_aggregations.xlsx')
             writer = pd.ExcelWriter(file_path, engine='xlsxwriter')
             if subset:
                 branch.framework.aggregations[subset].to_excel(writer, sheet_name=name, index=False)
@@ -1456,10 +1456,10 @@ def save_aggregation_to_excel(branch, file_path, subset):
     if file_path == 'archive':
         if subset:
             file_path = str(branch.tree.name + '\\archive\\' + branch.scenario.scenario +
-                            '_econ_aggregation_' + subset + '_' + branch.tree.run_time + '.xlsx')
+                            '_probability_aggregations_' + subset + '_' + branch.tree.run_time + '.xlsx')
         else:
             file_path = str(branch.tree.name + '\\archive\\' + branch.scenario.scenario +
-                            '_econ_aggregation_' + branch.tree.run_time + '.xlsx')
+                            '_probability_aggregations_' + branch.tree.run_time + '.xlsx')
         writer = pd.ExcelWriter(file_path, engine='xlsxwriter')
         if subset:
             branch.framework.aggregations[subset].to_excel(writer, sheet_name=name, index=False)
@@ -2382,7 +2382,7 @@ def run_restore_query(branch, uuid_list):
             conn.commit()
             cursor.close()
 
-def load_probabilities(branch):
+def load_probabilities(branch, sim=0):
     num_prop = len(branch.properties.propnum)
     uncertainty = {
         'idp': branch.properties.propnum.values,
@@ -2426,6 +2426,7 @@ def load_probabilities(branch):
     risk = pd.DataFrame(risk)
     if branch.scenario.probability is not None:
         print('initializing probability model')
+        sys.stdout.flush()
         df = load_probability_scenario(branch)
         if len(df) == 0:
             do_not_proceed = True
@@ -2463,9 +2464,15 @@ def load_probabilities(branch):
                     d = prob_dict(r_p[r_p.type == 'abandon'].value.values[0])
                     abandon = apply_risk(d)
                     if abandon is not None:
-                        risk.loc[risk.idp.isin(properties), 'performance'] = 0.0
-                        risk.loc[risk.idp.isin(properties), 'profile'] = 0.0
-                    risk.loc[risk.idp.isin(properties), 'abandon'] = abandon
+                        prop = np.random.choice(properties, 1)
+                        rem_prop = [p for p in properties if p not in prop]
+                        risk.loc[risk.idp.isin(prop), 'performance'] = 0.0
+                        risk.loc[risk.idp.isin(prop), 'profile'] = 0.0
+                        risk.loc[risk.idp.isin(prop), 'abandon'] = abandon
+                        risk.loc[risk.idp.isin(rem_prop), 'abandon'] = None
+                    else:
+                        risk.loc[risk.idp.isin(properties), 'abandon'] = abandon
+                    
                 for t in r_p.type.values:
                     if t == 'abandon':
                         continue
@@ -2483,8 +2490,58 @@ def load_probabilities(branch):
                                 if r_val is not None:
                                     r_val = int(r_val)
                             risk.loc[risk.idp.isin(properties), t] = r_val
+                    else:
+                        if t == 'downtime':
+                            d = prob_dict(r_p[r_p.type == t].value.values[0])
+                            risk.loc[risk.idp.isin(properties), 'downtime'] = True
+                            risk.loc[risk.idp.isin(properties), 'frequency'] = d['frequency']
+                            risk.loc[risk.idp.isin(properties), 'duration'] = d['duration']
+                            risk.loc[risk.idp.isin(properties), 'downtime_mult'] = d['mult']
+                        else:
+                            
+                            d = prob_dict(r_p[r_p.type == t].value.values[0])
+                            r_val = apply_risk(d)
+                            if t == 'delay':
+                                if r_val is not None:
+                                    r_val = int(r_val)
+                            risk.loc[risk.idp.isin(rem_prop), t] = r_val                     
 
     uncertainty = uncertainty
     risk = risk
 
+    save_probability_log(branch, uncertainty, risk, sim)
+
     return risk, uncertainty
+
+def save_probability_log(branch, uncertainty, risk, sim):
+    eng = engine(branch.tree.connection_dict) 
+    u = uncertainty.melt(id_vars=['idp'], var_name='type', value_name='value')
+    u['category'] = 'uncertainty'
+    u['scenario'] = branch.scenario.scenario
+    u['run_date'] = pd.Timestamp(branch.tree.run_time)
+    u['simulation'] = sim
+    u.to_sql(name='probability_log', con=eng,
+             if_exists='append', method='multi',
+             index=False, chunksize=500)
+    r = risk.melt(id_vars=['idp'], var_name='type', value_name='value')
+    r['category'] = 'risk'
+    r['scenario'] = branch.scenario.scenario
+    r['run_date'] = pd.Timestamp(branch.tree.run_time)
+    r['simulation'] = sim
+    r.to_sql(name='probability_log', con=eng,
+             if_exists='append', method='multi',
+             index=False, chunksize=500)
+    return
+
+def save_probability_output(framework, results):
+    conn = connect(framework.branch.tree.connection_dict)
+    eng = engine(framework.branch.tree.connection_dict)
+    placeholders = ', '.join('?' * len(results.columns))
+    query = str('insert into probability_monthly_output values (' + placeholders + ')')
+    results.loc[:, 'prod_date'] = results.loc[:, 'prod_date'].dt.strftime('%')
+    results.loc[:, 'run_date'] = results.loc[:, 'run_date'].dt.strftime('%')
+    cursor = conn.cursor()
+    cursor.executemany(query, list(results.itertuples(index=False, name=None)))
+    conn.commit()
+    cursor.close()
+    return
