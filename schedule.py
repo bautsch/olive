@@ -241,7 +241,7 @@ class Schedule():
             if not pd.isnull(s.compl_end_date.values[0]):
                 self.pad_dict[pad].compl_finish = pd.Timestamp(s.compl_end_date.values[0])
             if not pd.isnull(s.prod_start_date.values[0]):
-                self.pad_dict[pad].prod_start = pd.Timestamp(s.prod_start_date.values[0])                 
+                self.pad_dict[pad].prod_start = pd.Timestamp(s.prod_start_date.values[0])            
 
     def calc_dates(self):
         # print('calculating drill dates')
@@ -328,12 +328,12 @@ class Rig():
     def set_mob_in(self, mob_in_days):
         self.mob_in = float(round(mob_in_days, 1))
         for pad in self.pad_list:
-            pad.conductors = self.conductors
+            pad.mob_in = self.mob_in
 
     def set_mob_out(self, mob_out_days):
         self.mob_out = float(round(mob_out_days, 1))
         for pad in self.pad_list:
-            pad.conductors = self.conductors
+            pad.conductors = self.mob_out
 
     def set_drill_time(self, drill_time=10.0):
         for pad in self.pad_list:
