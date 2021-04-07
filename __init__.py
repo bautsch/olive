@@ -530,6 +530,19 @@ class Branch():
         timer(start, stop)
 
     def build_output(self, delete_all=True, rename=None):
+        if self.probability:
+            do_not_proceed = True
+            while do_not_proceed is True:
+                print('PROBABILITY DATA LOADED FOR \'' + self.scenario.probability + '\'')
+                cmd = input('proceed with run? (y/n): ')
+                if cmd not in ('yes', 'no', 'YES', 'NO', 'y', 'n', 'Y', 'N'):
+                    print('invalid command')
+                else:
+                    if cmd in ('no', 'NO', 'n', 'N'):
+                        return
+                    else:
+                        do_not_proceed = False
+
         self.framework.delete_all = delete_all
         self.framework.rename = rename
         print('\nsaving temp load file')
