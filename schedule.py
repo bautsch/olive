@@ -179,7 +179,7 @@ class Schedule():
 
                 if row['parameter'] == 'mob_in_days':
                     if row['unit'] == 'fix':
-                        self.pad_dict[pad].rig.set_mob_in(float(row['value']))
+                        self.pad_dict[pad].mob_in = float(row['value'])
 
                 if row['parameter'] == 'drill_days':
                     if row['unit'] == 'fix':
@@ -189,7 +189,7 @@ class Schedule():
 
                 if row['parameter'] == 'mob_out_days':
                     if row['unit'] == 'fix':
-                        self.pad_dict[pad].rig.set_mob_out(float(row['value']))
+                        self.pad_dict[pad].mob_out = float(row['value'])
 
                 if row['parameter'] == 'build_fac_days':
                     if row['unit'] == 'fix':
@@ -212,36 +212,51 @@ class Schedule():
                         self.pad_dict[pad].set_flowback_time(float(row['value']))
                 
             s = self.schedule_df[self.schedule_df['pad'] == pad]
+
             if not pd.isnull(s.pad_start_date.values[0]):
                 self.pad_dict[pad].build_start = pd.Timestamp(s.pad_start_dates[0])
+
             if not pd.isnull(s.pad_end_date.values[0]):
                 self.pad_dict[pad].build_finish = pd.Timestamp(s.pad_end_date.values[0])
+
             if not pd.isnull(s.conductor_days.values[0]):
                 self.pad_dict[pad].conductors = s.conductor_days.values[0]
+
             if not pd.isnull(s.mob_in_days.values[0]):
                 self.pad_dict[pad].mob_in = s.mob_in_days.values[0]
+
             if not pd.isnull(s.drill_days.values[0]):
                 self.pad_dict[pad].set_drill_time(s.drill_days.values[0])
+
             if not pd.isnull(s.mob_out_days.values[0]):
                 self.pad_dict[pad].mob_out = s.mob_out_days.values[0]
+
             if not pd.isnull(s.logging_days.values[0]):
                 self.pad_dict[pad].set_logging_time_per_well(s.logging_days.values[0])
+
             if not pd.isnull(s.build_fac_days.values[0]):
                 self.pad_dict[pad].set_fac_time(s.build_fac_days.values[0])
+
             if not pd.isnull(s.frac_days.values[0]):
                 self.pad_dict[pad].set_compl_time(s.frac_days.values[0])
+
             if not pd.isnull(s.flowback_days.values[0]):
                 self.pad_dict[pad].set_flowback_time(s.flowback_days.values[0])
+
             if not pd.isnull(s.drill_start_date.values[0]):
                 self.pad_dict[pad].drill_start = pd.Timestamp(s.drill_start_date.values[0])
+
             if not pd.isnull(s.drill_end_date.values[0]):
                 self.pad_dict[pad].drill_finish = pd.Timestamp(s.drill_end_date.values[0])
+
             if not pd.isnull(s.compl_start_date.values[0]):
                 self.pad_dict[pad].compl_start = pd.Timestamp(s.compl_start_date.values[0])
+
             if not pd.isnull(s.compl_end_date.values[0]):
                 self.pad_dict[pad].compl_finish = pd.Timestamp(s.compl_end_date.values[0])
+
             if not pd.isnull(s.prod_start_date.values[0]):
-                self.pad_dict[pad].prod_start = pd.Timestamp(s.prod_start_date.values[0])            
+                self.pad_dict[pad].prod_start = pd.Timestamp(s.prod_start_date.values[0])   
 
     def calc_dates(self):
         # print('calculating drill dates')
@@ -280,8 +295,8 @@ class Rig():
         self.num_pads = 0
         self.pad_list = []
         self.conductors = 14
-        self.mob_in = 7
-        self.mob_out = 7
+        self.mob_in = 3.5
+        self.mob_out = 3.5
 
     def __repr__(self):
         print_dict = self.__dict__.copy()
@@ -329,6 +344,7 @@ class Rig():
         self.mob_in = float(round(mob_in_days, 1))
         for pad in self.pad_list:
             pad.mob_in = self.mob_in
+            print(pad.mob_in)
 
     def set_mob_out(self, mob_out_days):
         self.mob_out = float(round(mob_out_days, 1))
