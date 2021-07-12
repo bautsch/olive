@@ -167,20 +167,33 @@ class Forecaster():
                     yields = [r[3] for r in results]
                     print('preparing dataframe')
                     sys.stdout.flush()
+                    drop_list = []
+                    for i, f in enumerate(fits):
+                        if f['scenario'] is None:
+                            drop_list.append(i)
+                    if len(drop_list) == len(fits):
+                        fits = []
+                    else:
+                        for i, d in enumerate(drop_list):
+                            del fits[d - i]
                     if len(fits) > 1:
                         fits = [pd.DataFrame(f) for f in fits if all(v is not None for v in f.values())]
                         fits = pd.concat(fits)
-                    else:
+                    elif len(fits) == 1:
                         fits = pd.DataFrame(fits[0])
-                    fits.dropna(subset=['scenario'], inplace=True)
-                    fits.loc[:, ['gas', 'oil', 'water',
-                                 'cum_gas', 'cum_oil', 'cum_water']] = fits.loc[:, ['gas', 'oil', 'water',
-                                 'cum_gas', 'cum_oil', 'cum_water']].fillna(value=0.0)
-                    yields = [pd.DataFrame(y) for y in yields if y is not None]
-                    yields = pd.concat(yields)
-                    print('saving forecasts')
-                    sys.stdout.flush()
-                    save_prod_forecasts(self, fits)
+                    if len(fits) > 0:
+                        fits.dropna(subset=['scenario'], inplace=True)
+                        fits.loc[:, ['gas', 'oil', 'water',
+                                    'cum_gas', 'cum_oil', 'cum_water']] = fits.loc[:, ['gas', 'oil', 'water',
+                                    'cum_gas', 'cum_oil', 'cum_water']].fillna(value=0.0)
+                        yields = [pd.DataFrame(y) for y in yields if y is not None]
+                        yields = pd.concat(yields)
+                        print('saving forecasts')
+                        sys.stdout.flush()
+                        save_prod_forecasts(self, fits)
+                    else:
+                        print('no forecasts to save')
+                        sys.stdout.flush()
                     del fits
 
                 self.log = logs
@@ -203,22 +216,34 @@ class Forecaster():
                 yields = [r[3] for r in results]
                 print('preparing dataframe')
                 sys.stdout.flush()
+                drop_list = []
+                for i, f in enumerate(fits):
+                    if f['scenario'] is None:
+                        drop_list.append(i)
+                if len(drop_list) == len(fits):
+                    fits = []
+                else:
+                    for i, d in enumerate(drop_list):
+                        del fits[d - i]
                 if len(fits) > 1:
                     fits = [pd.DataFrame(f) for f in fits if all(v is not None for v in f.values())]
                     fits = pd.concat(fits)
-                else:
+                elif len(fits) == 1:
                     fits = pd.DataFrame(fits[0])
-                fits.dropna(subset=['scenario'], inplace=True)
-                fits.loc[:, ['gas', 'oil', 'water',
-                                'cum_gas', 'cum_oil', 'cum_water']] = fits.loc[:, ['gas', 'oil', 'water',
-                                'cum_gas', 'cum_oil', 'cum_water']].fillna(value=0.0)
-                yields = [pd.DataFrame(y) for y in yields if y is not None]
-                yields = pd.concat(yields)
-                print('saving forecasts')
-                sys.stdout.flush()
-                save_prod_forecasts(self, fits)
-                update_yields(self, yields)
-
+                if len(fits) > 0:
+                    fits.dropna(subset=['scenario'], inplace=True)
+                    fits.loc[:, ['gas', 'oil', 'water',
+                                    'cum_gas', 'cum_oil', 'cum_water']] = fits.loc[:, ['gas', 'oil', 'water',
+                                    'cum_gas', 'cum_oil', 'cum_water']].fillna(value=0.0)
+                    yields = [pd.DataFrame(y) for y in yields if y is not None]
+                    yields = pd.concat(yields)
+                    print('saving forecasts')
+                    sys.stdout.flush()
+                    save_prod_forecasts(self, fits)
+                    update_yields(self, yields)
+                else:
+                    print('no forecasts to save')
+                    sys.stdout.flush()
                 self.log = logs
                 self.well_dict = well_dict
 
@@ -510,12 +535,12 @@ class Forecaster():
             forecast = arps_fit(params, dmin, min_rate)
             start_idx = len(well.prod_info[t]['y'])
             max_idx = well.prod_info[t]['max_idx']
-            if well.prod_info[t]['y'][-14:].sum() < 1:
+            if well.prod_info[t]['y'][-60:].sum() < 1:
                 forecast = np.multiply(forecast, 0)
-                print(well.idp, 'no production in last 14 days, setting forecast to zero')
+                print(well.idp, 'no production in last 60 days, setting forecast to zero')
                 log['scenario'] = self.branch.scenario.scenario
                 log['idp'] = well.idp
-                log['message'] = 'no production in last 14 days, setting forecast to zero'
+                log['message'] = 'no production in last 60 days, setting forecast to zero'
                 sys.stdout.flush()
             forecast = np.concatenate([well.prod_info[t]['y'], forecast[start_idx:]])
 

@@ -307,7 +307,6 @@ class Framework():
                     prev = chunks[idc - 1][0]
                     start = start + prev
                 tmp_chunks.append([c[0], c[1], start])
-                sys.stdout.flush()
             chunks = tmp_chunks
             pool = mp.Pool(processes=len(chunks))
             results = pool.map(self.run_simulations_mc, chunks)
@@ -373,7 +372,7 @@ class Framework():
         property_list = chunk[1]
         results = []
         for sim in range(num_simulations):
-            print('simulation', sim + 1, 'of', num_simulations, 'in chunk', chunk[2])
+            print('simulation', sim + 1, 'of', num_simulations, 'in chunk', int(int(chunk[2])/int(chunk[0])+1))
             sys.stdout.flush()
             if sim != 0:
                 self.risk, self.uncertainty = load_probabilities(self.branch, sim + 1 + chunk[2])
@@ -387,7 +386,8 @@ class Framework():
                 results.append(self.prepopulate(property_list))
             else:
                 df = self.prepopulate(property_list)
-                df['simulation'] = sim + 1
+                sim_num = int(sim + 1 + int(chunk[2]))
+                df['simulation'] = sim_num
                 results.append(df)
         if not self.mc_monthly:
             for i, sim in enumerate(results):
@@ -561,6 +561,13 @@ class Framework():
                 complete_mult = u.complete_cost.values[0]
             else:
                 complete_mult = r.complete_cost.values[0]
+
+            if r.in_zone.values[0] is not None:
+                tc_mult = tc_mult * r.in_zone.values[0]
+
+            if r.wellbore.values[0] is not None:
+                tc_mult = tc_mult * r.wellbore.values[0]
+
             gas_price_mult = u.gas_price.values[0]
             oil_price_mult = u.oil_price.values[0]
             ngl_price_mult = u.ngl_price.values[0]
@@ -579,6 +586,7 @@ class Framework():
             duration = r.duration.values[0]
             frequency = r.frequency.values[0]
             downtime_mult = r.downtime_mult.values[0]
+            downtime_cost = r.downtime_cost.values[0]
             gas_downtime = 0
             oil_downtime = 0
             delay = r.delay.values[0]
@@ -768,6 +776,11 @@ class Framework():
                 df['tax_rate'][idx:idx+num_days] = (inputs['tax_sev'].tax_sev.values +
                                                     inputs['tax_adval'].tax_adval.values)
                 df['gross_misc_capex'][idx:idx+num_days] = inputs['inv_g_misc'].inv_g_misc.values * infra_cost
+
+                if downtime:
+                    spend_day = np.argmax(mask)
+                    df['gross_misc_capex'][idx:idx+num_days][spend_day] = (df['gross_misc_capex'][idx:idx+num_days][spend_day] 
+                                                                           + downtime_cost)
 
                 if budget_type == 'wedge':
 

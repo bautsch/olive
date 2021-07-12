@@ -1229,20 +1229,57 @@ def load_output_from_sql(branch, scenario_name):
                 'and prod_date <= \'' + end_date.strftime('%x') + '\'')
     return pd.read_sql(query, conn)    
 
-def update_forecast(connection_dict, w, production):
-    conn = connect(connection_dict)
-    eng = engine(connection_dict)
+def update_forecast(branch, w, production, first_on, last_on):
+    conn = connect(branch.tree.connection_dict)
+    eng = engine(branch.tree.connection_dict)
     cursor = conn.cursor()
     query = str('delete from prod_forecasts ' +
-                'where forecast = \'' + w.forecast + '\' '
-                'and time_on <= ' + str(production.time_on.max()))
+                'where scenario = \'' + w.prod_forecast_scenario + '\' '
+                'and time_on >= ' + str(first_on) + ' '
+                'and time_on <= ' + str(last_on) + ' '
+                'and idp = \'' + w.idp + '\'')
     cursor.execute(query)
     conn.commit()
     cursor.close()
+    print('deleted old production')
     production.to_sql(name='prod_forecasts', con=eng,
                       if_exists='append', method='multi',
                       index=False, chunksize=500)
-        
+    print('saved new production')
+
+def update_cumulative(branch, w):
+    conn = connect(branch.tree.connection_dict)
+    eng = engine(branch.tree.connection_dict)
+    cursor = conn.cursor()
+    query = str('update prod_forecasts '
+                'set cum_gas = b.cum_gas '
+                'from prod_forecasts a inner join (select time_on, sum(gas) over (order by time_on) as cum_gas '
+                'from prod_forecasts where idp = \'' + w.idp + '\' and scenario = \'' + w.prod_forecast_scenario + '\') b '
+                'on a.time_on = b.time_on '
+                'where idp = \'' + w.idp + '\' and scenario = \'' + w.prod_forecast_scenario + '\'')
+    cursor.execute(query)
+    print('updated gas cumulative production')
+    conn.commit()
+    query = str('update prod_forecasts '
+                'set cum_oil = b.cum_oil '
+                'from prod_forecasts a inner join (select time_on, sum(oil) over (order by time_on) as cum_oil '
+                'from prod_forecasts where idp = \'' + w.idp + '\' and scenario = \'' + w.prod_forecast_scenario + '\') b '
+                'on a.time_on = b.time_on '
+                'where idp = \'' + w.idp + '\' and scenario = \'' + w.prod_forecast_scenario + '\'')
+    cursor.execute(query)
+    print('updated oil cumulative production')
+    conn.commit()
+    query = str('update prod_forecasts '
+                'set cum_water = b.cum_water '
+                'from prod_forecasts a inner join (select time_on, sum(water) over (order by time_on) as cum_water '
+                'from prod_forecasts where idp = \'' + w.idp + '\' and scenario = \'' + w.prod_forecast_scenario + '\') b '
+                'on a.time_on = b.time_on '
+                'where idp = \'' + w.idp + '\' and scenario = \'' + w.prod_forecast_scenario + '\'')
+    cursor.execute(query)
+    conn.commit()
+    print('updated water cumulative production')
+    cursor.close()
+
 def delete_output(framework):
     start = time.time()
     conn = connect(framework.branch.tree.connection_dict)
@@ -1713,14 +1750,21 @@ def load_production(branch, properties):
         prop_list = ', '.join('\'{0}\''.format(p) for p in properties)
     elif isinstance(properties, str):
         prop_list = str('\'' + properties + '\'')
-    if branch.max_date:
-        query = str('select * from daily_production '
-                    'where idp in (' + prop_list  + ') '
-                    'and prod_date <= \'' + branch.max_date.strftime('%x') + '\'')
-    else:   
-        query = str('select * from daily_production '
-                    'where idp in (' + prop_list  + ')')
-    return pd.read_sql(query, connection)    
+    query = str('select * from daily_production '
+                'where idp in (' + prop_list  + ') '
+                'and prod_date <= getdate()')
+    return pd.read_sql(query, connection)
+
+def load_prod_forecast(branch, properties, time_on):
+    connection = connect(branch.tree.connection_dict)
+    if isinstance(properties, list):
+        prop_list = ', '.join('\'{0}\''.format(p) for p in properties)
+    elif isinstance(properties, str):
+        prop_list = str('\'' + properties + '\'')
+    query = str('select * from prod_forecasts '
+                'where idp in (' + prop_list  + ') '
+                'and time_on >= ' + time_on + '\'')
+    return pd.read_sql(query, connection)
 
 def arps_fit(params, dmin, min_rate):
     if abs(params[0] - 1) < 0.0001:
@@ -1948,7 +1992,6 @@ def save_prod_forecasts(forecaster, fits):
     placeholders = ', '.join('?' * len(fits.keys()))
     query = str('insert into prod_forecasts values (' + placeholders + ')')
     cursor = conn.cursor()
-    fits.to_csv('test.csv')
     cursor.executemany(query, fits.itertuples(index=False, name=None))
     conn.commit()
     cursor.close()
@@ -1971,7 +2014,6 @@ def save_manual_prod_forecast(branch, fcst_dict, idp):
     query = str('insert into prod_forecasts values (' + placeholders + ')')
     temp = pd.DataFrame(fcst_dict)
     cursor = conn.cursor()
-    temp.to_csv('test.csv')
     cursor.executemany(query, temp.itertuples(index=False, name=None))
     conn.commit()
     cursor.close()
@@ -1984,7 +2026,6 @@ def update_yields(forecaster, yields):
     start = time.time()
     conn = connect(forecaster.branch.tree.connection_dict)
     eng = engine(forecaster.branch.tree.connection_dict)
-    yields.to_csv('test.csv')
     yields.to_sql(name='temp_yields', con=eng,
                   if_exists='replace', method='multi',
                   index=False, chunksize=500)
@@ -2077,6 +2118,8 @@ def apply_risk(d):
             return d['cost']
         elif 'ip_mult' in d.keys():
             return d['ip_mult']
+        elif 'tc_mult' in d.keys():
+            return d['tc_mult']
     else:
         return None
 
@@ -2408,6 +2451,8 @@ def load_probabilities(branch, sim=0):
         'idp': branch.properties.propnum.values,
         'drill_time': [1.0] * num_prop,
         'performance': [None] * num_prop,
+        'in_zone': [None] * num_prop,
+        'wellbore': [None] * num_prop,
         'profile': [1.0] * num_prop,
         'curtailment': [None] * num_prop,
         'frac_hit': [None] * num_prop,
@@ -2419,6 +2464,7 @@ def load_probabilities(branch, sim=0):
         'frequency': [None] * num_prop,
         'duration': [None] * num_prop,
         'downtime_mult': [None] * num_prop,
+        'downtime_cost': [None] * num_prop,
         'gas_downtime': [None] * num_prop,
         'oil_downtime': [None] * num_prop,
         'delay': [None] * num_prop,
@@ -2472,7 +2518,7 @@ def load_probabilities(branch, sim=0):
                         risk.loc[risk.idp.isin(rem_prop), 'abandon'] = None
                     else:
                         risk.loc[risk.idp.isin(properties), 'abandon'] = abandon
-                    
+
                 for t in r_p.type.values:
                     if t == 'abandon':
                         continue
@@ -2483,6 +2529,7 @@ def load_probabilities(branch, sim=0):
                             risk.loc[risk.idp.isin(properties), 'frequency'] = d['frequency']
                             risk.loc[risk.idp.isin(properties), 'duration'] = d['duration']
                             risk.loc[risk.idp.isin(properties), 'downtime_mult'] = d['mult']
+                            risk.loc[risk.idp.isin(properties), 'downtime_cost'] = d['cost']
                         else:
                             d = prob_dict(r_p[r_p.type == t].value.values[0])
                             r_val = apply_risk(d)
@@ -2497,14 +2544,14 @@ def load_probabilities(branch, sim=0):
                             risk.loc[risk.idp.isin(properties), 'frequency'] = d['frequency']
                             risk.loc[risk.idp.isin(properties), 'duration'] = d['duration']
                             risk.loc[risk.idp.isin(properties), 'downtime_mult'] = d['mult']
+                            risk.loc[risk.idp.isin(properties), 'downtime_cost'] = d['cost']
                         else:
-                            
                             d = prob_dict(r_p[r_p.type == t].value.values[0])
                             r_val = apply_risk(d)
                             if t == 'delay':
                                 if r_val is not None:
                                     r_val = int(r_val)
-                            risk.loc[risk.idp.isin(rem_prop), t] = r_val                     
+                            risk.loc[risk.idp.isin(rem_prop), t] = r_val            
 
     uncertainty = uncertainty
     risk = risk

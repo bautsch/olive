@@ -333,7 +333,7 @@ class Rig():
     def set_mob_out(self, mob_out_days):
         self.mob_out = float(round(mob_out_days, 1))
         for pad in self.pad_list:
-            pad.conductors = self.mob_out
+            pad.mob_out = self.mob_out
 
     def set_drill_time(self, drill_time=10.0):
         for pad in self.pad_list:

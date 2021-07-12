@@ -283,23 +283,6 @@ class Tree():
     def actually_autofit(self):
         self.branches[list(self.branches.keys())[0]].forecaster.autofit()
 
-## Move to forecasting module ##
-    def update_forecasts(self, branch):
-        print('updating production in forecasts')
-        if branch.framework.economics is None:
-            branch.framework.load_well_data()
-        for w in branch.framework.well_dict.values():
-            if w.forecast != w.idp:
-                continue
-            production = load_production(self.connection_dict, w)
-            production.iloc[:-3]
-            time_on = np.arange(1, production.shape[0] + 1)
-            production['time_on'] = time_on
-            production = production[['idp', 'time_on', 'prod_date',
-                                     'gross_gas', 'gross_oil', 'gross_water']]
-            production.rename(columns={'idp': 'forecast'}, inplace=True)
-            update_forecast(self.connection_dict, w, production)
-
 
 class Branch():
     def __init__(self, branch_name, tree, scenario, max_date):
@@ -582,3 +565,34 @@ class Branch():
 
     def restore(self, uuid):
         run_restore_query(self, uuid)
+
+    def update_forecasts(self, cumulative=True):
+        print('updating production in forecasts')
+        if self.forecaster is None:
+            self.forecaster = Forecaster(self)
+        for i, w in enumerate(self.forecaster.well_dict.values()):
+            print(i, w.idp)
+            if w.forecast != w.idp:
+                print(i, 'skipping type curve')
+                continue
+            production = load_production(self, w.idp)
+            if production.empty:
+                print('no production!')
+                continue
+            production.fillna(0, inplace=True)
+            production = production[:-2]
+            last_on = production['time_on'].max()
+            first_on = production['time_on'].min()
+            production['scenario'] = w.prod_forecast_scenario
+            production['forecast'] = w.forecast
+            production['prod_cat'] = 'actual'
+            production['cum_gas'] = 0
+            production['cum_oil'] = 0
+            production['cum_water'] = 0
+            production = production[['scenario', 'idp', 'forecast', 'time_on',
+                                     'prod_date', 'prod_cat',
+                                     'gas', 'oil', 'water',
+                                     'cum_gas', 'cum_oil', 'cum_water']]
+            update_forecast(self, w, production, first_on, last_on)
+            if cumulative:
+                update_cumulative(self, w)
