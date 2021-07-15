@@ -82,7 +82,7 @@ class Schedule():
         self.pad_dict = {}
         self.well_dict = {}
         self.schedule_df.loc[:, 'rig'] = self.schedule_df.loc[:, 'rig'].str.upper()
-        self.schedule_df.loc[:, 'pad'] = self.schedule_df.loc[:, 'pad'].str.upper()
+        # self.schedule_df.loc[:, 'pad'] = self.schedule_df.loc[:, 'pad'].str.upper()
         self.schedule_df.loc[:, 'input_group'] = self.schedule_df.loc[:, 'input_group'].str.upper()
         for _, row in self.schedule_df.iterrows():
             if row['rig']!= 'DUC':
@@ -496,7 +496,10 @@ class Well_Sched():
         self.drill_time = round(drill_time, 1)
 
     def set_drill_time_by_depth(self, feet_per_day=1600):
-        self.drill_time = round(self.depth / feet_per_day, 1)
+        if self.depth is None:
+            print('no depth assigned to', self.well_name)
+        else:
+            self.drill_time = round(self.depth / feet_per_day, 1)
 
     def set_buffer(self, num_days=0):
         self.buffer = round(num_days, 1)
