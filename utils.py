@@ -1643,12 +1643,46 @@ def framework_dataframe(branch):
     if 'price_deck' in df.index:
         df.drop(index='price_deck', inplace=True)
     return df
-        
-def xirr(cf, guess=0.1):
-    try:
-        return optimize.newton(lambda r: xnpv(cf, r), guess)
-    except RuntimeError:
-        return 0.
+
+def xirr(cf):
+    tol = 10
+    disc_cf = cf.sum()
+    max_iter = 1000
+
+    if cf.sum() > 0:
+        step = 0.01
+        iter = 0
+        guess = 0.0
+        while abs(disc_cf) > tol:
+            disc_cf = xnpv(cf, guess)
+            if abs(disc_cf) > tol:
+                if disc_cf > 0:
+                    guess += step
+                else:
+                    guess -= step
+                    step /= 2.0
+                iter += 1
+            if iter == max_iter:
+                break
+        return guess
+    else:
+        step = -0.01
+        iter = 0
+        guess = 0.0
+        while abs(disc_cf) > tol:
+            disc_cf = xnpv(cf, guess)
+            if abs(disc_cf) > tol:
+                if disc_cf > 0:
+                    guess -= step
+                    step /= 2.0
+                else:
+                    guess += step
+                iter += 1
+            if iter == max_iter:
+                break
+            if guess <= -1.0:
+                return -1
+        return guess
 
 def npv(cf, d=0.1):
     return cf/(1+d)**(np.arange(cf.shape[0])/365.25)

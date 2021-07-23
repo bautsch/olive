@@ -1080,8 +1080,6 @@ class Framework():
                     econ_dists['avg_ngl_price'][n] = df['realized_ngl_price'][(df['idp'] == p) & (df['realized_ngl_price'] > 0)].mean()
                     if risk_uncertainty[p]['abandon'] is None:
                         irr = xirr(df['fcf'][df['idp'] == p][start:end])
-                        if irr > 1000:
-                            irr = -1
                         econ_dists['irr'][n] = irr
                     else:
                         econ_dists['irr'][n] = -1
