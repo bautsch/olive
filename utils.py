@@ -272,7 +272,7 @@ def update_daily_production(tree):
                 'from daily_production inner join cog_working.dbo.ac_daily '
                 'on daily_production.idp = cog_working.dbo.ac_daily.propnum '
                 'and daily_production.prod_date = cog_working.dbo.ac_daily.d_date '
-                'where daily_production.prod_date > dateadd(day, -90, getdate())')
+                'where daily_production.prod_date > dateadd(day, -365, getdate())')
     cursor = conn.cursor()
     cursor.execute(query)
     conn.commit()
@@ -2540,52 +2540,53 @@ def load_probabilities(branch, sim=0):
                 col = r[r.property_id == p].property.values[0]
                 properties = branch.properties[branch.properties[col] == p].propnum
                 r_p = r[r.property_id == p]
-                if 'abandon' in r_p.type.values:
-                    d = prob_dict(r_p[r_p.type == 'abandon'].value.values[0])
-                    abandon = apply_risk(d)
-                    if abandon is not None:
-                        prop = np.random.choice(properties, 1)
-                        rem_prop = [p for p in properties if p not in prop]
-                        risk.loc[risk.idp.isin(prop), 'performance'] = 0.0
-                        risk.loc[risk.idp.isin(prop), 'profile'] = 0.0
-                        risk.loc[risk.idp.isin(prop), 'abandon'] = abandon
-                        risk.loc[risk.idp.isin(rem_prop), 'abandon'] = None
-                    else:
-                        risk.loc[risk.idp.isin(properties), 'abandon'] = abandon
+                if len(properties) > 0:
+                    if 'abandon' in r_p.type.values:
+                        d = prob_dict(r_p[r_p.type == 'abandon'].value.values[0])
+                        abandon = apply_risk(d)
+                        if abandon is not None:
+                            prop = np.random.choice(properties, 1)
+                            rem_prop = [p for p in properties if p not in prop]
+                            risk.loc[risk.idp.isin(prop), 'performance'] = 0.0
+                            risk.loc[risk.idp.isin(prop), 'profile'] = 0.0
+                            risk.loc[risk.idp.isin(prop), 'abandon'] = abandon
+                            risk.loc[risk.idp.isin(rem_prop), 'abandon'] = None
+                        else:
+                            risk.loc[risk.idp.isin(properties), 'abandon'] = abandon
 
-                for t in r_p.type.values:
-                    if t == 'abandon':
-                        continue
-                    if abandon is None:
-                        if t == 'downtime':
-                            d = prob_dict(r_p[r_p.type == t].value.values[0])
-                            risk.loc[risk.idp.isin(properties), 'downtime'] = True
-                            risk.loc[risk.idp.isin(properties), 'frequency'] = d['frequency']
-                            risk.loc[risk.idp.isin(properties), 'duration'] = d['duration']
-                            risk.loc[risk.idp.isin(properties), 'downtime_mult'] = d['mult']
-                            risk.loc[risk.idp.isin(properties), 'downtime_cost'] = d['cost']
+                    for t in r_p.type.values:
+                        if t == 'abandon':
+                            continue
+                        if abandon is None:
+                            if t == 'downtime':
+                                d = prob_dict(r_p[r_p.type == t].value.values[0])
+                                risk.loc[risk.idp.isin(properties), 'downtime'] = True
+                                risk.loc[risk.idp.isin(properties), 'frequency'] = d['frequency']
+                                risk.loc[risk.idp.isin(properties), 'duration'] = d['duration']
+                                risk.loc[risk.idp.isin(properties), 'downtime_mult'] = d['mult']
+                                risk.loc[risk.idp.isin(properties), 'downtime_cost'] = d['cost']
+                            else:
+                                d = prob_dict(r_p[r_p.type == t].value.values[0])
+                                r_val = apply_risk(d)
+                                if t == 'delay':
+                                    if r_val is not None:
+                                        r_val = int(r_val)
+                                risk.loc[risk.idp.isin(properties), t] = r_val
                         else:
-                            d = prob_dict(r_p[r_p.type == t].value.values[0])
-                            r_val = apply_risk(d)
-                            if t == 'delay':
-                                if r_val is not None:
-                                    r_val = int(r_val)
-                            risk.loc[risk.idp.isin(properties), t] = r_val
-                    else:
-                        if t == 'downtime':
-                            d = prob_dict(r_p[r_p.type == t].value.values[0])
-                            risk.loc[risk.idp.isin(properties), 'downtime'] = True
-                            risk.loc[risk.idp.isin(properties), 'frequency'] = d['frequency']
-                            risk.loc[risk.idp.isin(properties), 'duration'] = d['duration']
-                            risk.loc[risk.idp.isin(properties), 'downtime_mult'] = d['mult']
-                            risk.loc[risk.idp.isin(properties), 'downtime_cost'] = d['cost']
-                        else:
-                            d = prob_dict(r_p[r_p.type == t].value.values[0])
-                            r_val = apply_risk(d)
-                            if t == 'delay':
-                                if r_val is not None:
-                                    r_val = int(r_val)
-                            risk.loc[risk.idp.isin(rem_prop), t] = r_val            
+                            if t == 'downtime':
+                                d = prob_dict(r_p[r_p.type == t].value.values[0])
+                                risk.loc[risk.idp.isin(properties), 'downtime'] = True
+                                risk.loc[risk.idp.isin(properties), 'frequency'] = d['frequency']
+                                risk.loc[risk.idp.isin(properties), 'duration'] = d['duration']
+                                risk.loc[risk.idp.isin(properties), 'downtime_mult'] = d['mult']
+                                risk.loc[risk.idp.isin(properties), 'downtime_cost'] = d['cost']
+                            else:
+                                d = prob_dict(r_p[r_p.type == t].value.values[0])
+                                r_val = apply_risk(d)
+                                if t == 'delay':
+                                    if r_val is not None:
+                                        r_val = int(r_val)
+                                risk.loc[risk.idp.isin(rem_prop), t] = r_val            
 
     uncertainty = uncertainty
     risk = risk

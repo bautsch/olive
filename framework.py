@@ -221,7 +221,7 @@ class Framework():
 
             min_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.min()]
             max_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.max()]
-            if max_prices.gas_price.values[0] > 4:
+            if max_prices.gas_price.values[0] > 6:
                 print('max gas price failed verification, reloading')
                 gas_check = True
                 continue
@@ -265,7 +265,7 @@ class Framework():
                             (temp_price_df.prod_date > max_prices.prod_date.values[0]),
                             'input_ngl_price'] = max_prices.ngl_price.values[0]
             self.price_deck = temp_price_df
-            if any(self.price_deck.input_gas_price > 5):
+            if any(self.price_deck.input_gas_price > 7):
                 print('gas price failed verification, reloading')
             else:
                 print('price deck verification succeeded')
@@ -1121,7 +1121,7 @@ class Framework():
             print('chunk completed')
             sys.stdout.flush()
             t = df['input_gas_price']
-            if any(t > 5):
+            if any(t > 6):
                 print('3 BAD!!!!!!!!!!!!!!!!!')
                 sys.stdout.flush()
             if self.production_only:
