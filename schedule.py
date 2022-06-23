@@ -71,7 +71,7 @@ class Schedule():
 
         self.calc_dates()
         self.gantt_chart()
-        self.save_schedule()
+        # self.save_schedule()
 
     def __repr__(self):
         return self.name

@@ -472,10 +472,10 @@ def calc_drill_dates(schedule):
                     else:
                         r = 1
                     if idxw == 0:
-                        if idxp == 0:
-                            next_pad = rig.pad_list[idxp + 1]
-                            if next_pad.drill_start is not None:
-                                pad_timing_delta = (next_pad.drill_start - pad.drill_finish).days
+                        # if idxp == 0:
+                        #     next_pad = rig.pad_list[idxp + 1]
+                        #     if next_pad.drill_start is not None:
+                        #         pad_timing_delta = (next_pad.drill_start - pad.drill_finish).days
                         if idxp > 0:
                             prior_pad = rig.pad_list[idxp - 1]
                             pad.drill_start = prior_pad.drill_finish + timedelta(pad_timing_delta)
@@ -779,8 +779,8 @@ def create_gantt_chart(schedule, file_path):
     if schedule.show_gantt:
         show(p_columns)
         
-    else:
-        save(p_columns)
+    # else:
+    #     save(p_columns)
 
 def load_framework_scenario(framework):
     conn = connect(framework.branch.tree.connection_dict)
@@ -1528,39 +1528,39 @@ def tablemaker(table, prod_date, forecast, overflow, month1,month2,month3):
         table.add_hline(cmidruleoption = '[3pt]')
 
 def monthly_avg(df, month1, month2, month3):
-	d = {month1: [[],[],[]],
+    d = {month1: [[],[],[]],
              month2:  [[],[],[]],
              month3:  [[],[],[]]}
-	d_avg = {month1: [], month2:  [],month3:  []}
+    d_avg = {month1: [], month2:  [],month3:  []}
 
-	for index,row in df.iterrows():
-            if row['prod_date'].month == month1:
-                d[month1][0].append(row['forecast'])
-                d[month1][1].append(row['max_volume'])
-                d[month1][2].append(row['report_overflow'])
-            if row['prod_date'].month == month2:
-                d[month2][0].append(row['forecast'])
-                d[month2][1].append(row['max_volume'])
-                d[month2][2].append(row['report_overflow'])
-            if row['prod_date'].month == month3:
-                d[month3][0].append(row['forecast'])
-                d[month3][1].append(row['max_volume'])
-                d[month3][2].append(row['report_overflow'])
+    for index,row in df.iterrows():
+        if row['prod_date'].month == month1:
+            d[month1][0].append(row['forecast'])
+            d[month1][1].append(row['max_volume'])
+            d[month1][2].append(row['report_overflow'])
+        if row['prod_date'].month == month2:
+            d[month2][0].append(row['forecast'])
+            d[month2][1].append(row['max_volume'])
+            d[month2][2].append(row['report_overflow'])
+        if row['prod_date'].month == month3:
+            d[month3][0].append(row['forecast'])
+            d[month3][1].append(row['max_volume'])
+            d[month3][2].append(row['report_overflow'])
 
-	for key,value in d.items():
-            if key == month1:
-                d_avg[month1].append(sum(value[0])/len(value[0]))
-                d_avg[month1].append(sum(value[1])/len(value[1]))
-                d_avg[month1].append(sum(value[2])/len(value[2]))
-            if key == month2:
-                d_avg[month2].append(sum(value[0])/len(value[0]))
-                d_avg[month2].append(sum(value[1])/len(value[1]))
-                d_avg[month2].append(sum(value[2])/len(value[2]))
-            if key == month3:
-                d_avg[month3].append(sum(value[0])/len(value[0]))
-                d_avg[month3].append(sum(value[1])/len(value[1]))
-                d_avg[month3].append(sum(value[2])/len(value[2]))
-	return d_avg
+    for key,value in d.items():
+        if key == month1:
+            d_avg[month1].append(sum(value[0])/len(value[0]))
+            d_avg[month1].append(sum(value[1])/len(value[1]))
+            d_avg[month1].append(sum(value[2])/len(value[2]))
+        if key == month2:
+            d_avg[month2].append(sum(value[0])/len(value[0]))
+            d_avg[month2].append(sum(value[1])/len(value[1]))
+            d_avg[month2].append(sum(value[2])/len(value[2]))
+        if key == month3:
+            d_avg[month3].append(sum(value[0])/len(value[0]))
+            d_avg[month3].append(sum(value[1])/len(value[1]))
+            d_avg[month3].append(sum(value[2])/len(value[2]))
+    return d_avg
 
 def avg_tablemaker(table, df, month1, month2, month3):
     d_avg = monthly_avg(df, month1, month2, month3)

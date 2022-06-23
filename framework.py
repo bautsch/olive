@@ -221,7 +221,7 @@ class Framework():
 
             min_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.min()]
             max_prices = self.price_deck[self.price_deck.prod_date == self.price_deck.prod_date.max()]
-            if max_prices.gas_price.values[0] > 6:
+            if max_prices.gas_price.values[0] > 10:
                 print('max gas price failed verification, reloading')
                 gas_check = True
                 continue
@@ -265,7 +265,7 @@ class Framework():
                             (temp_price_df.prod_date > max_prices.prod_date.values[0]),
                             'input_ngl_price'] = max_prices.ngl_price.values[0]
             self.price_deck = temp_price_df
-            if any(self.price_deck.input_gas_price > 7):
+            if any(self.price_deck.input_gas_price > 10):
                 print('gas price failed verification, reloading')
             else:
                 print('price deck verification succeeded')
@@ -1086,6 +1086,8 @@ class Framework():
                     try:
                         econ_dists['payout'][n] = np.where(df['fcf'][df['idp'] == p][start:end].cumsum() >= 0)[0][0] / (365.25/12)
                     except:
+                        print('error')
+                        sys.stdout.flush()
                         econ_dists['payout'][n] = np.nan
                     econ_dists['year_1_cf'][n] = df['cf'][df['idp'] == p][start:start+365].sum()
                     econ_dists['year_1_fcf'][n] = df['fcf'][df['idp'] == p][start:start+365].sum()
@@ -1121,7 +1123,7 @@ class Framework():
             print('chunk completed')
             sys.stdout.flush()
             t = df['input_gas_price']
-            if any(t > 6):
+            if any(t > 9):
                 print('3 BAD!!!!!!!!!!!!!!!!!')
                 sys.stdout.flush()
             if self.production_only:
@@ -1152,14 +1154,14 @@ class Framework():
         if not self.daily_output:
             sys.stdout.flush()
             t = df['input_gas_price']
-            if any(t > 5):
+            if any(t > 9):
                 print('4 BAD!!!!!!!!!!!!!!!!!')
                 sys.stdout.flush()
             df = pd.DataFrame(df)
             df.dropna(subset=['prod_date'], inplace=True)
             df.reset_index(inplace=True, drop=True)
             t = df.input_gas_price
-            if any(t > 5):
+            if any(t > 9):
                 print('5 BAD!!!!!!!!!!!!!!!!!')
                 sys.stdout.flush()
             print('converting to monthly\n')
